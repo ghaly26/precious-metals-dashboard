@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = "https://precious-metals-dashboard.onrender.com"; // Replace with your backend URL
 
 function App() {
   const [metals, setMetals] = useState(null);
