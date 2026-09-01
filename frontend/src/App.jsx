@@ -155,9 +155,10 @@ function App() {
 
                   <div style={{ textAlign: 'left', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'sans-serif' }}>SILVER 925 ITALY OUNCE</div>
-                    <div style={{ fontSize: '22px', color: '#f8fafc', marginTop: '2px' }}>${Math.round(metals.silver925ItalyGram * 31.1035).toFixed(2)}</div>
+                    <div style={{ fontSize: '22px', color: '#f8fafc', marginTop: '2px' }}>
+                      ${(metals.silver925ItalyGram * 31.1035).toFixed(2)}
+                    </div>
                   </div>
-
                 </div>
 
                 {/* COLUMN B: GRAM BENCHMARKS */}
@@ -165,7 +166,7 @@ function App() {
                   <div style={{ fontSize: '11px', color: '#64748b', letterSpacing: '2px', fontWeight: 'bold', marginBottom: '5px', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px', fontFamily: 'sans-serif' }}>Gram Pricing</div>
                   <div style={{ textAlign: 'left', padding: '6px 0' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'sans-serif' }}>GOLD 24K GRAM</div>
-                    <div style={{ fontSize: '22px', color: '#ffffff', marginTop: '2px' }}>${metals.gold24kGram.toFixed(2)}
+                    <div style={{ fontSize: '22px', color: '#ffffff', marginTop: '2px' }}>${metals.gold24kGram.toFixed(2)}</div>
                   </div>
                   <div style={{ textAlign: 'left', padding: '6px 0' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'sans-serif' }}>GOLD 21K GRAM</div>
