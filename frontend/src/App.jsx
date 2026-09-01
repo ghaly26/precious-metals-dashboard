@@ -155,7 +155,7 @@ function App() {
 
                   <div style={{ textAlign: 'left', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'sans-serif' }}>SILVER 925 ITALY OUNCE</div>
-                    <div style={{ fontSize: '22px', color: '#f8fafc', marginTop: '2px' }}>${Math.round(metals.silver925ItalyOunce).toLocaleString()}</div>
+                    <div style={{ fontSize: '22px', color: '#f8fafc', marginTop: '2px' }}>${Math.round(metals.silver925ItalyGram * 31.1035).toFixed(2)}</div>
                   </div>
 
                 </div>
