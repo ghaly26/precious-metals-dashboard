@@ -10,7 +10,7 @@ app.use(express.json());
 async function fetchNetdaniaPrice(symbolPath) {
   try {
     const response = await axios.get(
-      `https://netdania.com{symbolPath}`,
+      `https://netdania.com${symbolPath}`,
       {
         timeout: 10000,
         headers: {
