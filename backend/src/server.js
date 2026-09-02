@@ -10,7 +10,6 @@ app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    // 🟢 FIXED: Using your exact unblocked Axios template parameters to hit NetDania's real-time raw price array feed
     const response = await axios.get(
       "https://goldprice.org",
       {
@@ -22,21 +21,41 @@ app.get('/api/metals', async (req, res) => {
       }
     );
 
+    // 🟢 DEBUG LOG: Prints the exact keys NetDania is returning right now to your Render dashboard log panel
+    console.log("-----------------------------------------");
+    console.log("RAW NETDANIA DATA KEYS:", Object.keys(response.data));
+    console.log("FULL DATA PAYLOAD:", JSON.stringify(response.data));
+    console.log("-----------------------------------------");
+
     const marketData = response.data;
 
-    // Strict validation: Extracting direct real-time numbers from NetDania's data fields
-    if (!marketData || !marketData.items || !marketData.items[0]) {
-      throw new Error("Could not extract active parameters from NetDania's live matrix response.");
+    // Smart-fallback parsing block: Tries multiple property name formats used by NetDania
+    let xau = null;
+    let xag = null;
+
+    if (marketData) {
+      // Structure format option 1: items object array
+      if (marketData.items && marketData.items) {
+        xau = parseFloat(marketData.items.xauPrice);
+        xag = parseFloat(marketData.items.xagPrice);
+      } 
+      // Structure format option 2: root object variables
+      else if (marketData.xauPrice || marketData.goldPrice) {
+        xau = parseFloat(marketData.xauPrice || marketData.goldPrice);
+        xag = parseFloat(marketData.xagPrice || marketData.silverPrice);
+      }
+      // Structure format option 3: array matrix elements
+      else if (Array.isArray(marketData) && marketData[0]) {
+        xau = parseFloat(marketData[0].xauPrice || marketData[0].price);
+        xag = parseFloat(marketData[0].xagPrice || marketData[0].price);
+      }
     }
 
-    const xau = parseFloat(marketData.items[0].xauPrice); // NetDania Live Gold Spot Price per Ounce
-    const xag = parseFloat(marketData.items[0].xagPrice); // NetDania Live Silver Spot Price per Ounce
-
-    if (isNaN(xau) || isNaN(xag)) {
-      throw new Error("Parsed real-time values from NetDania are not valid numerical coordinates.");
+    // Direct system block validation: No unparsed metrics allowed to pass through
+    if (!xau || !xag) {
+      throw new Error(`Data extraction map structural mismatch. Received keys: ${Object.keys(marketData || {}).join(', ')}`);
     }
 
-    // Deliver exact computations directly to your luxury user interface
     res.json({
       status: "success",
       gold24kOunce: xau,
