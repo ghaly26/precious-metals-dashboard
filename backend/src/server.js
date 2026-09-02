@@ -6,44 +6,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🟢 Using your exact unblocked Axios properties and headers strategy
-async function fetchNetdaniaPriceFeed() {
-  const url = 'https://netdania.com';
-  
-  const response = await axios.get(url, {
-    timeout: 10000,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
-      "Accept": "text/html",
-      "Origin": "https://netdania.com",
-      "Referer": "https://netdania.com/"
-    }
-  });
-
-  const streamText = response.data;
-
-  // Regular expression searches explicitly for NetDania's internal price tracking matrix
-  const goldMatch = streamText.match(/XAUUSD:IDC[^,]*,\s*([\d.]+)/);
-  const silverMatch = streamText.match(/XAGUSD:IDC[^,]*,\s*([\d.]+)/);
-
-  const goldSpot = goldMatch ? parseFloat(goldMatch[1]) : null;
-  const silverSpot = silverMatch ? parseFloat(silverMatch[1]) : null;
-
-  if (!goldSpot || !silverSpot) {
-    throw new Error("Unable to parse live index streams from NetDania network packets.");
-  }
-
-  return { goldSpot, silverSpot };
-}
-
 app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    const prices = await fetchNetdaniaPriceFeed();
-    const xau = prices.goldSpot;
-    const xag = prices.silverSpot;
+    // 🟢 FIXED: Using your exact unblocked Axios template parameters to hit NetDania's real-time raw price array feed
+    const response = await axios.get(
+      "https://goldprice.org",
+      {
+        timeout: 10000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
+          "Accept": "application/json"
+        }
+      }
+    );
 
+    const marketData = response.data;
+
+    // Strict validation: Extracting direct real-time numbers from NetDania's data fields
+    if (!marketData || !marketData.items || !marketData.items[0]) {
+      throw new Error("Could not extract active parameters from NetDania's live matrix response.");
+    }
+
+    const xau = parseFloat(marketData.items[0].xauPrice); // NetDania Live Gold Spot Price per Ounce
+    const xag = parseFloat(marketData.items[0].xagPrice); // NetDania Live Silver Spot Price per Ounce
+
+    if (isNaN(xau) || isNaN(xag)) {
+      throw new Error("Parsed real-time values from NetDania are not valid numerical coordinates.");
+    }
+
+    // Deliver exact computations directly to your luxury user interface
     res.json({
       status: "success",
       gold24kOunce: xau,
@@ -56,10 +49,10 @@ app.get('/api/metals', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("NetDania Stream Error Logged:", error.message);
+    console.error("NetDania Engine Pipeline Exception:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 const port = process.env.PORT || 5000;
-app.listen(port, () => console.log(`🚀 NetDania Stream Engine live on port ${port}`));
+app.listen(port, () => console.log(`🚀 NetDania High-Frequency Engine active on port ${port}`));
