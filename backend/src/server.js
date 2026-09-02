@@ -16,46 +16,46 @@ app.get('/api/metals', async (req, res) => {
         timeout: 10000,
         headers: {
           "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
-          "Accept": "application/json"
+          "Accept": "text/html,application/json"
         }
       }
     );
 
-    // 🟢 DEBUG LOG: Prints the exact keys NetDania is returning right now to your Render dashboard log panel
-    console.log("-----------------------------------------");
-    console.log("RAW NETDANIA DATA KEYS:", Object.keys(response.data));
-    console.log("FULL DATA PAYLOAD:", JSON.stringify(response.data));
-    console.log("-----------------------------------------");
+    // Convert the massive character sequence array straight into a readable document string
+    const rawPayloadString = typeof response.data === 'string' 
+      ? response.data 
+      : JSON.stringify(response.data);
 
-    const marketData = response.data;
-
-    // Smart-fallback parsing block: Tries multiple property name formats used by NetDania
     let xau = null;
     let xag = null;
 
-    if (marketData) {
-      // Structure format option 1: items object array
-      if (marketData.items && marketData.items) {
-        xau = parseFloat(marketData.items.xauPrice);
-        xag = parseFloat(marketData.items.xagPrice);
-      } 
-      // Structure format option 2: root object variables
-      else if (marketData.xauPrice || marketData.goldPrice) {
-        xau = parseFloat(marketData.xauPrice || marketData.goldPrice);
-        xag = parseFloat(marketData.xagPrice || marketData.silverPrice);
-      }
-      // Structure format option 3: array matrix elements
-      else if (Array.isArray(marketData) && marketData[0]) {
-        xau = parseFloat(marketData[0].xauPrice || marketData[0].price);
-        xag = parseFloat(marketData[0].xagPrice || marketData[0].price);
-      }
-    }
+    // 🟢 STRATEGY: High-precision regex matching tailored to extract numbers from the raw text feed
+    const goldRegex = /"xauPrice"\s*:\s*([\d.]+)/i;
+    const silverRegex = /"xagPrice"\s*:\s*([\d.]+)/i;
 
-    // Direct system block validation: No unparsed metrics allowed to pass through
+    const goldMatch = rawPayloadString.match(goldRegex);
+    const silverMatch = rawPayloadString.match(silverRegex);
+
+    if (goldMatch && goldMatch[1]) xau = parseFloat(goldMatch[1]);
+    if (silverMatch && silverMatch[1]) xag = parseFloat(silverMatch[1]);
+
+    // Secondary backup check parsing in case the keys display alternative naming variations
     if (!xau || !xag) {
-      throw new Error(`Data extraction map structural mismatch. Received keys: ${Object.keys(marketData || {}).join(', ')}`);
+      const altGoldRegex = /"gold"\s*:\s*([\d.]+)/i;
+      const altSilverRegex = /"silver"\s*:\s*([\d.]+)/i;
+      const altGoldMatch = rawPayloadString.match(altGoldRegex);
+      const altSilverMatch = rawPayloadString.match(altSilverRegex);
+      
+      if (!xau && altGoldMatch) xau = parseFloat(altGoldMatch[1]);
+      if (!xag && altSilverMatch) xag = parseFloat(altSilverMatch[1]);
     }
 
+    // Direct system block validation: No hardcoded fallback numbers allowed
+    if (!xau || !xag) {
+      throw new Error("Could not extract active precious metal numeric parameters from the raw data stream string.");
+    }
+
+    // Deliver exact computations directly to your luxury user interface
     res.json({
       status: "success",
       gold24kOunce: xau,
