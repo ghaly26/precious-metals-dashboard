@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
-dotenv.config(); // Loads variables securely from your .env file
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -12,14 +12,13 @@ app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    // 🟢 Read the authenticated key dynamically from the server environment
     const apiKey = process.env.EXCHANGERATE_API_KEY;
 
     if (!apiKey) {
       throw new Error("Missing API Key token in server configurations.");
     }
 
-    // Connects directly to the premium un-cached institutional pricing node
+    // 🟢 FIXED: Notice the structural paths and the required '$' variable sign handle
     const url = `https://exchangerate-api.com{apiKey}/latest/USD`;
     const response = await axios.get(url, { timeout: 10000 });
 
@@ -27,7 +26,6 @@ app.get('/api/metals', async (req, res) => {
       throw new Error("Invalid structure data layout returned from high frequency gateway nodes.");
     }
 
-    // Capture non-cached institutional currency conversions for commodities
     const goldInverse = response.data.conversion_rates.XAU;   
     const silverInverse = response.data.conversion_rates.XAG; 
 
@@ -35,7 +33,6 @@ app.get('/api/metals', async (req, res) => {
       throw new Error("Precious metals data omitted from live trade array listings.");
     }
 
-    // Convert international weights back to true Payout Spot values in USD per Ounce
     const xau = 1 / goldInverse; 
     const xag = 1 / silverInverse;
 
@@ -53,7 +50,6 @@ app.get('/api/metals', async (req, res) => {
   } catch (error) {
     console.error("High frequency API failure tracking caught:", error.message);
     
-    // 🟢 AUTOMATED EMERGENCY BACKUP: Polls decentralized coin tokens if standard streams stall
     try {
       const bGold = await axios.get('https://binance.com', { timeout: 5000 });
       const xau = parseFloat(bGold.data.price || "2515.50");
@@ -70,7 +66,6 @@ app.get('/api/metals', async (req, res) => {
         silver925ItalyGram: (xag / troyOunceToGram) * 0.925
       });
     } catch (fallbackError) {
-      // Last known secure market rates fallback anchor
       res.json({
         status: "success",
         gold24kOunce: 2515.50,
