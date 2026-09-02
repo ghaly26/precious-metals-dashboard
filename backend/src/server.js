@@ -10,52 +10,31 @@ app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    const response = await axios.get(
-      "https://goldprice.org",
-      {
-        timeout: 10000,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
-          "Accept": "text/html,application/json"
-        }
+    // 🟢 Connects to an open, high-frequency public financial gateway delivering clean JSON data matrices
+    const response = await axios.get('https://exchangerate-api.com', {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
-    );
+    });
 
-    // Convert the massive character sequence array straight into a readable document string
-    const rawPayloadString = typeof response.data === 'string' 
-      ? response.data 
-      : JSON.stringify(response.data);
-
-    let xau = null;
-    let xag = null;
-
-    // 🟢 STRATEGY: High-precision regex matching tailored to extract numbers from the raw text feed
-    const goldRegex = /"xauPrice"\s*:\s*([\d.]+)/i;
-    const silverRegex = /"xagPrice"\s*:\s*([\d.]+)/i;
-
-    const goldMatch = rawPayloadString.match(goldRegex);
-    const silverMatch = rawPayloadString.match(silverRegex);
-
-    if (goldMatch && goldMatch[1]) xau = parseFloat(goldMatch[1]);
-    if (silverMatch && silverMatch[1]) xag = parseFloat(silverMatch[1]);
-
-    // Secondary backup check parsing in case the keys display alternative naming variations
-    if (!xau || !xag) {
-      const altGoldRegex = /"gold"\s*:\s*([\d.]+)/i;
-      const altSilverRegex = /"silver"\s*:\s*([\d.]+)/i;
-      const altGoldMatch = rawPayloadString.match(altGoldRegex);
-      const altSilverMatch = rawPayloadString.match(altSilverRegex);
-      
-      if (!xau && altGoldMatch) xau = parseFloat(altGoldMatch[1]);
-      if (!xag && altSilverMatch) xag = parseFloat(altSilverMatch[1]);
+    if (!response.data || !response.data.rates) {
+      throw new Error("Invalid structure returned from external financial gateway.");
     }
 
-    // Direct system block validation: No hardcoded fallback numbers allowed
-    if (!xau || !xag) {
-      throw new Error("Could not extract active precious metal numeric parameters from the raw data stream string.");
+    // In global financial currency matrix streams, precious metals are listed as reciprocal parameters (1 USD = X metal)
+    const goldInverse = response.data.rates.XAU;   // Amount of pure gold ounce buyable with 1 USD
+    const silverInverse = response.data.rates.XAG; // Amount of pure silver ounce buyable with 1 USD
+
+    if (!goldInverse || !silverInverse) {
+      throw new Error(`Commodity tickers missing from exchange map grid data. Gold: ${goldInverse}, Silver: ${silverInverse}`);
     }
 
-    // Deliver exact computations directly to your luxury user interface
+    // 🟢 Convert the reciprocal rates back into true Price Per Troy Ounce values in USD
+    const xau = 1 / goldInverse; 
+    const xag = 1 / silverInverse;
+
+    // Send the live market values directly down to your React dashboard grids
     res.json({
       status: "success",
       gold24kOunce: xau,
@@ -68,10 +47,10 @@ app.get('/api/metals', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("NetDania Engine Pipeline Exception:", error.message);
+    console.error("Metals Engine Exception:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 const port = process.env.PORT || 5000;
-app.listen(port, () => console.log(`🚀 NetDania High-Frequency Engine active on port ${port}`));
+app.listen(port, () => console.log(`🚀 Premium Metals Gateway active on port ${port}`));
