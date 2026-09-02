@@ -12,7 +12,7 @@ app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
   
   // 🟢 READ FROM ENV OR FALLBACK TO YOUR WORKING KEY
-  const apiKey = process.env.ALPHA_VANTAGE_KEY || " FXQJ7APYCAS8Y9G8";
+  const apiKey = process.env.ALPHA_VANTAGE_KEY || "FXQJ7APYCAS8Y9G8";
 
   try {
     // 1. Fetch live Gold price from an unblocked institutional stream
