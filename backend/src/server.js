@@ -10,30 +10,31 @@ app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    // 🟢 Connects to Yahoo Finance's unblocked high-frequency commodity tracking feeds
-    const goldUrl = 'https://yahoo.com';
-    const silverUrl = 'https://yahoo.com';
+    // 🟢 Connects to an unblocked high-frequency public financial gateway delivering clean data matrices
+    const response = await axios.get('https://er-api.com', {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
 
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    };
-
-    // 1. Fetch live Gold prices natively
-    const goldResponse = await axios.get(goldUrl, { headers, timeout: 10000 });
-    
-    // 2. Fetch live Silver prices natively
-    const silverResponse = await axios.get(silverUrl, { headers, timeout: 10000 });
-
-    // 3. Extract the exact final market quote from Yahoo's database array charts
-    const xau = goldResponse.data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    const xag = silverResponse.data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-
-    // Strict validation verification: No hardcoded fallback values allowed
-    if (!xau || !xag) {
-      throw new Error(`Market feed parsing error. Gold extracted: ${xau}, Silver: ${xag}`);
+    if (!response.data || !response.data.rates) {
+      throw new Error("Invalid structure returned from external financial gateway.");
     }
 
-    // Deliver exact computations directly to your luxury user interface
+    // In global financial currency matrix streams, precious metals are listed as reciprocal parameters (1 USD = X metal)
+    const goldInverse = response.data.rates.XAU;   // Amount of pure gold ounce buyable with 1 USD
+    const silverInverse = response.data.rates.XAG; // Amount of pure silver ounce buyable with 1 USD
+
+    if (!goldInverse || !silverInverse) {
+      throw new Error(`Commodity tickers missing from exchange map grid data. Gold: ${goldInverse}, Silver: ${silverInverse}`);
+    }
+
+    // 🟢 Convert the reciprocal rates back into true Price Per Troy Ounce values in USD
+    const xau = 1 / goldInverse; 
+    const xag = 1 / silverInverse;
+
+    // Send the live market values directly down to your React dashboard grids
     res.json({
       status: "success",
       gold24kOunce: xau,
