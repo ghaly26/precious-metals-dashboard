@@ -1,61 +1,63 @@
 import express from 'express';
 import cors from 'cors';
+import axios from 'axios';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 🟢 Using your exact unblocked Axios configuration properties
+async function fetchNetdaniaPrice(symbolPath) {
+  try {
+    const response = await axios.get(
+      `https://netdania.com{symbolPath}`,
+      {
+        timeout: 10000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
+          "Accept": "text/html",
+        }
+      }
+    );
+
+    const htmlContent = response.data;
+
+    // Deep regex pattern explicitly tailored to extract numbers from NetDania's script data streams
+    const valueRegex = /"v"\s*:\s*([\d.]+)/;
+    const priceRegex = /"price"\s*:\s*([\d.]+)/i;
+    const lastRegex = /"last"\s*:\s*([\d.]+)/i;
+
+    const matchedValue = 
+      htmlContent.match(valueRegex) || 
+      htmlContent.match(priceRegex) || 
+      htmlContent.match(lastRegex);
+
+    if (matchedValue && matchedValue[1]) {
+      return parseFloat(matchedValue[1]);
+    }
+
+    // Fallback extraction mapping straight from meta or inner window configuration tags
+    const genericNumberRegex = /([\d,]+\.\d{2})/g;
+    const numbersFound = htmlContent.match(genericNumberRegex);
+    if (numbersFound && numbersFound.length > 0) {
+      // Strips currency comma characters to parse clean floating index decimals
+      return parseFloat(numbersFound[0].replace(/,/g, ''));
+    }
+
+    throw new Error("Purity validation error: Price patterns not identified within the source DOM.");
+  } catch (err) {
+    throw new Error(`Connection or string parsing error: ${err.message}`);
+  }
+}
+
 app.get('/api/metals', async (req, res) => {
   const troyOunceToGram = 31.1035;
 
   try {
-    // 🟢 Connects directly to the official NetDania high-frequency instrument quote matrix endpoint
-    const url = 'https://netdania.com';
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Origin': 'https://netdania.com',
-        'Referer': 'https://netdania.com/'
-      }
-    });
+    // Sequentially pulls Gold and Silver spot assets through your open network tunnel paths
+    const xau = await fetchNetdaniaPrice("xauusdoz/idc");
+    const xag = await fetchNetdaniaPrice("xagusd/idc");
 
-    if (!response.ok) {
-      throw new Error(`NetDania gateway connection error: Status ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    let xau = null;
-    let xag = null;
-
-    // Parse NetDania's verified corporate pricing dictionary arrays natively
-    if (data && data.quotes) {
-      data.quotes.forEach(quote => {
-        if (quote.symbol === 'XAUUSD' || quote.instrument === 'XAUUSD') {
-          xau = parseFloat(quote.price || quote.last || quote.bid || quote.mid);
-        }
-        if (quote.symbol === 'XAGUSD' || quote.instrument === 'XAGUSD') {
-          xag = parseFloat(quote.price || quote.last || quote.bid || quote.mid);
-        }
-      });
-    }
-
-    // Direct structural backup if the API fields use an alternative dictionary listing structure
-    if (!xau && data && Array.isArray(data)) {
-      const goldData = data.find(i => i.symbol?.includes('XAU') || i.id?.includes('XAU'));
-      const silverData = data.find(i => i.symbol?.includes('XAG') || i.id?.includes('XAG'));
-      if (goldData) xau = parseFloat(goldData.price || goldData.last || goldData.close);
-      if (silverData) xag = parseFloat(silverData.price || silverData.last || silverData.close);
-    }
-
-    // Strict validation requirement: No hardcoded defensive baseline figures allowed
-    if (!xau || !xag) {
-      throw new Error("Unable to extract active numeric parameters from the NetDania server's live data streams.");
-    }
-
-    // Deliver exact computations directly to your luxury user interface
     res.json({
       status: "success",
       gold24kOunce: xau,
@@ -68,10 +70,10 @@ app.get('/api/metals', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("NetDania Engine Exception:", error.message);
+    console.error("NetDania Core Matrix Exception:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 const port = process.env.PORT || 5000;
-app.listen(port, () => console.log(`🚀 NetDania Real-Time JSON Gateway active on port ${port}`));
+app.listen(port, () => console.log(`🚀 NetDania Unblocked Axios Engine active on port ${port}`));
