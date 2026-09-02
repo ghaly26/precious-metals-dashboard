@@ -10,59 +10,33 @@ app.use(express.json());
 
 const troyOunceToGram = 31.1035;
 
-// Last known-good prices, used only if Netdania AND the hardcoded fallback below are needed.
-// Update these occasionally so the "last resort" fallback isn't wildly stale.
+// Last known-good prices, used only if metals.dev AND the cache are both unavailable.
 const HARD_FALLBACK = { xau: 2515.50, xag: 29.40 };
 
-// Simple in-memory cache so we don't hammer Netdania on every dashboard refresh.
+// Simple in-memory cache so we don't burn free-tier requests on every dashboard refresh.
 let cache = { data: null, timestamp: 0 };
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
 
-const NETDANIA_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-};
+async function fetchMetalsDevPrice(metal) {
+  const apiKey = process.env.METALS_DEV_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
+  }
 
-/**
- * Netdania's mobile "full quote" pages render the price as plain text near a
- * label like "Gold, spot" / "Silver, spot". We strip tags to text and grab
- * the first decimal number that follows the label.
- */
-function extractPriceAfterLabel(html, label) {
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, '\n')
-    .replace(/&nbsp;/g, ' ');
+  const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
+  const response = await axios.get(url, { timeout: 10000 });
 
-  const idx = text.indexOf(label);
-  if (idx === -1) return null;
-
-  const after = text.slice(idx + label.length, idx + label.length + 500);
-  const match = after.match(/-?\d{1,3}(?:,\d{3})*\.\d{1,4}/);
-  if (!match) return null;
-
-  const value = parseFloat(match[0].replace(/,/g, ''));
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-async function fetchNetdaniaPrice(path, label) {
-  const url = `https://m.netdania.com/commodities/${path}/idc`;
-  const response = await axios.get(url, {
-    timeout: 10000,
-    headers: NETDANIA_HEADERS,
-  });
-  const price = extractPriceAfterLabel(response.data, label);
-  if (!price) {
-    throw new Error(`Could not parse "${label}" price from Netdania response.`);
+  const price = response.data?.rate?.price;
+  if (!price || typeof price !== 'number') {
+    throw new Error(`metals.dev returned no usable price for ${metal}.`);
   }
   return price;
 }
 
 async function fetchLiveXauXag() {
   const [xau, xag] = await Promise.all([
-    fetchNetdaniaPrice('xauusdoz', 'Gold, spot'),
-    fetchNetdaniaPrice('xagusdoz', 'Silver, spot'),
+    fetchMetalsDevPrice('gold'),
+    fetchMetalsDevPrice('silver'),
   ]);
   return { xau, xag };
 }
@@ -93,11 +67,10 @@ app.get('/api/metals', async (req, res) => {
     cache = { data: payload, timestamp: now };
     return res.json(payload);
   } catch (error) {
-    console.error("Netdania fetch failed:", error.message);
+    console.error("metals.dev fetch failed:", error.message);
 
-    // Serve a stale-but-real cached value rather than the hardcoded number, if we have one.
     if (cache.data) {
-      console.warn("Serving stale cached prices after Netdania failure.");
+      console.warn("Serving stale cached prices after metals.dev failure.");
       return res.json(cache.data);
     }
 
