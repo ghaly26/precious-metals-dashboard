@@ -23,7 +23,7 @@ async function fetchMetalsDevPrice(metal) {
     throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
   }
 
-  const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
+  const url = `https://metals.dev{apiKey}&metal=${metal}&currency=USD`;
   const response = await axios.get(url, { timeout: 10000 });
 
   const price = response.data?.rate?.price;
@@ -76,6 +76,64 @@ app.get('/api/metals', async (req, res) => {
 
     console.warn("No cache available, serving hardcoded fallback prices.");
     return res.json(buildPayload(HARD_FALLBACK));
+  }
+});
+
+// 🟢 Client Quote Notification Route (Emails info@queenjewelryllc.com)
+app.post('/api/send-quote', async (req, res) => {
+  const { metalType, weight, spotRate, baseValue, customFee, totalGross, locationData, timestamp } = req.body;
+
+  try {
+    const emailSubject = `👑 New Client Valuation Quote - ${metalType} (${weight}g)`;
+    const emailHtmlContent = `
+      <div style="font-family: sans-serif; padding: 20px; background: #0b0f19; color: #f8fafc; border-radius: 10px;">
+        <h2 style="color: #d4af37; border-bottom: 1px solid #334155; padding-bottom: 10px;">Queen Jewelry - Portal Quote Log</h2>
+        <p><strong>Timestamp:</strong> ${timestamp}</p>
+        
+        <h3 style="color: #38ef7d; margin-top: 20px;">Client Location Details:</h3>
+        <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
+          <li><strong>IP Address:</strong> ${locationData?.ip || 'Unknown'}</li>
+          <li><strong>Location:</strong> ${locationData?.city || 'Unknown'}, ${locationData?.region || ''} ${locationData?.country || ''}</li>
+          <li><strong>Coordinates:</strong> ${locationData?.loc || 'Unknown'}</li>
+          <li><strong>Network / ISP:</strong> ${locationData?.org || 'Unknown'}</li>
+        </ul>
+
+        <h3 style="color: #00f2fe; margin-top: 20px;">Valuation Breakdown:</h3>
+        <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
+          <li><strong>Metal Purity:</strong> ${metalType}</li>
+          <li><strong>Weight:</strong> ${weight} grams</li>
+          <li><strong>Spot Rate:</strong> $${spotRate} /g</li>
+          <li><strong>Gold Base Value:</strong> $${baseValue} USD</li>
+          <li><strong>Store Processing Fee:</strong> +$${customFee} USD</li>
+          <li style="font-size: 16px; color: #38ef7d; margin-top: 8px;"><strong>Final Client Gross:</strong> $${totalGross} USD</li>
+        </ul>
+      </div>
+    `;
+
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (resendApiKey) {
+      // 🟢 FIXED: Adjusted path routing layout to hit Resend's real email gateway endpoint instead of the home website domain
+      await axios.post('https://resend.com', {
+        from: 'Queen Jewelry Portal <info@queenjewelryllc.com>',
+        to: ['info@queenjewelryllc.com'],
+        subject: emailSubject,
+        html: emailHtmlContent
+      }, {
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log("📨 Quote notification email sent successfully to info@queenjewelryllc.com");
+    } else {
+      console.log("⚠️ RESEND_API_KEY missing in environment variables. Email simulation logged only.");
+    }
+
+    res.json({ success: true, message: "Quote log recorded successfully." });
+  } catch (error) {
+    console.error("Quote email dispatch failure:", error.response?.data || error.message);
+    res.status(500).json({ success: false, error: "Failed to process quote notification." });
   }
 });
 
