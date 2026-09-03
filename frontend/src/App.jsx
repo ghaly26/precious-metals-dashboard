@@ -10,7 +10,7 @@ function App() {
 
   const [weight, setWeight] = useState('');
   const [selectedMetal, setSelectedMetal] = useState('gold24kGram');
-  const [customFee, setCustomFee] = useState('00.00');
+  const [customFee, setCustomFee] = useState('');
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
