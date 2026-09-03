@@ -200,7 +200,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>STORE PROCESSING / MARGIN FEE ($ USD)</label>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>STORE PROCESSING / MARGIN FEE ($/Gram)</label>
                   <input
                     type="number"
                     step="any"
