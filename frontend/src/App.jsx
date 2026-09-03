@@ -10,7 +10,7 @@ function App() {
 
   const [weight, setWeight] = useState('');
   const [selectedMetal, setSelectedMetal] = useState('gold24kGram');
-  const [customFee, setCustomFee] = useState('26.00');
+  const [customFee, setCustomFee] = useState('00.00');
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -301,7 +301,7 @@ function App() {
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px', fontSize: '13px', fontFamily: 'sans-serif', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '15px', width: '100%' }}>
               <a href="https://queenjewelryllc.com" target="_blank" rel="noreferrer" style={{ color: '#d4af37', textDecoration: 'none', fontWeight: '600' }}>Official Website</a>
               <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer" style={{ color: '#4facfe', textDecoration: 'none', fontWeight: '600' }}>Facebook Page</a>
+              <a href="https://www.facebook.com/profile.php?id=61586279284348" target="_blank" rel="noreferrer" style={{ color: '#4facfe', textDecoration: 'none', fontWeight: '600' }}>Facebook Page</a>
             </div>
           </div>
         )}
