@@ -11,7 +11,7 @@ function App() {
   // Calculator state parameters
   const [weight, setWeight] = useState('');
   const [selectedMetal, setSelectedMetal] = useState('gold24kGram');
-  const [feePercentage, setFeePercentage] = useState(10); // 🟢 Store Fee Slider State (default 10%)
+    const [customFee, setCustomFee] = useState('26.00'); // 🟢 Custom dollar amount input fee
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -47,8 +47,8 @@ function App() {
     }
     const ratePerGram = metals[selectedMetal];
     const gross = parseFloat(weight) * ratePerGram;
-    const fee = gross * (feePercentage / 100);
-    const netPayout = gross - fee;
+    const fee = parseFloat(customFee);
+    const netPayout = gross - fee*weight; // Adjusted to multiply fee by weight for total fee deduction
 
     setGrossValue(gross);
     setFeeAmount(fee);
@@ -61,7 +61,7 @@ function App() {
     if (weight && metals) {
       handleCalculate();
     }
-  }, [feePercentage, selectedMetal, metals]);
+  }, [customFee, selectedMetal, metals]);
 
   // 📄 Automated PDF Receipt Generator
   const generatePDFReceipt = () => {
@@ -134,8 +134,8 @@ function App() {
     doc.text("Gross Material Value:", 25, 120);
     doc.text(`$${grossValue.toFixed(2)} USD`, 175, 120, { align: 'right' });
 
-    doc.text(`Store Processing / Margin Fee (${feePercentage}%):`, 25, 128);
-    doc.text(`-$${feeAmount.toFixed(2)} USD`, 175, 128, { align: 'right' });
+    doc.text(`Store Processing / Margin Fee:`, 25, 128);
+    doc.text(`-$${fee.toFixed(2)} USD`, 175, 128, { align: 'right' });
 
     doc.setDrawColor(212, 175, 55);
     doc.line(25, 133, 185, 133);
