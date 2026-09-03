@@ -48,7 +48,7 @@ function App() {
     const ratePerGram = metals[selectedMetal];
     const baseGoldPrice = Number(weight) * ratePerGram;
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
-    const clientTotalGross = baseGoldPrice + fee;
+    const clientTotalGross = baseGoldPrice + fee*Number(weight);
 
     setGrossValue(baseGoldPrice);
     setFeeAmount(fee);
