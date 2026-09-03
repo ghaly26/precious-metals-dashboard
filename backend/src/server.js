@@ -114,7 +114,7 @@ app.post('/api/send-quote', async (req, res) => {
 
     if (resendApiKey) {
       await axios.post('https://resend.com', {
-        from: 'Queen Jewelry Portal <onboarding@resend.dev>',
+        from: 'Queen Jewelry Portal <info@queenjewelryllc.com>',
         to: ['info@queenjewelryllc.com'],
         subject: emailSubject,
         html: emailHtmlContent
