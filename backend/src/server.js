@@ -23,7 +23,7 @@ async function fetchMetalsDevPrice(metal) {
     throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
   }
 
-  const url = `https://metals.dev{apiKey}&metal=${metal}&currency=USD`;
+  const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
   const response = await axios.get(url, { timeout: 10000 });
 
   const price = response.data?.rate?.price;
@@ -54,7 +54,6 @@ function buildPayload({ xau, xag }) {
   };
 }
 
-// 🟢 EXISTING: Live Metals Spot Price Route
 app.get('/api/metals', async (req, res) => {
   const now = Date.now();
 
