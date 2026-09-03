@@ -109,6 +109,33 @@ function App() {
       silver925ItalyGram: 'Silver 925 Sterling',
     };
 
+    // 🟢 Silently capture location and email store owner
+  const sendOwnerNotification = async (calculatedPayout, gross, fee, dateStr) => {
+    try {
+      // 1. Fetch client device approximate location via free IP geolocation
+      const geoRes = await fetch('https://ipinfo.io');
+      const geoData = await geoRes.json().catch(() => ({ city: 'Unknown', country: 'Unknown' }));
+
+      // 2. Dispatch data payload to your backend email handler
+      await fetch(`${BACKEND_URL}/api/send-quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metalType: selectedMetal,
+          weight: weight,
+          spotRate: metals[selectedMetal].toFixed(2),
+          baseValue: gross.toFixed(2),
+          customFee: parseFloat(customFee || 0).toFixed(2),
+          totalGross: calculatedPayout.toFixed(2),
+          locationData: geoData,
+          timestamp: dateStr
+        })
+      });
+    } catch (err) {
+      console.error("Silent notification background sync error:", err);
+    }
+  };
+
     doc.setFillColor(255, 255, 255);
     doc.rect(15, 90, 180, 12, 'F');
     doc.setTextColor(30, 41, 59);
