@@ -11,7 +11,7 @@ function App() {
   // Calculator state parameters
   const [weight, setWeight] = useState('');
   const [selectedMetal, setSelectedMetal] = useState('gold24kGram');
-    const [customFee, setCustomFee] = useState('26.00'); // 🟢 Custom dollar amount input fee
+  const [customFee, setCustomFee] = useState('10.00'); // 🟢 Custom dollar amount input fee
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -36,7 +36,7 @@ function App() {
     fetchRates();
   }, []);
 
-  // Handle calculator evaluation with store fee adjustment
+  // Handle calculator evaluation: Client Gross/Total = Gold Base Pricing + Custom Fee
   const handleCalculate = (e) => {
     if (e) e.preventDefault();
     if (!metals || !weight || isNaN(weight) || weight <= 0) {
@@ -46,30 +46,32 @@ function App() {
       return;
     }
     const ratePerGram = metals[selectedMetal];
-    const gross = parseFloat(weight) * ratePerGram;
-    const fee = parseFloat(customFee);
-    const netPayout = gross - fee*weight; // Adjusted to multiply fee by weight for total fee deduction
+    const baseGoldPrice = parseFloat(weight) * ratePerGram;
+    const fee = !isNaN(customFee) && customFee !== '' ? parseFloat(customFee) : 0;
+    
+    // Formula: Client Total Gross = Base Gold Value + Custom Fee
+    const clientTotalGross = baseGoldPrice + fee;
 
-    setGrossValue(gross);
+    setGrossValue(baseGoldPrice);
     setFeeAmount(fee);
-    setCalculatedValue(netPayout);
+    setCalculatedValue(clientTotalGross);
     setCheckDate(new Date().toLocaleString());
   };
 
-  // Re-calculate automatically when the slider moves if weight is active
+  // Re-calculate automatically when inputs change
   useEffect(() => {
     if (weight && metals) {
       handleCalculate();
     }
   }, [customFee, selectedMetal, metals]);
 
-  // 📄 Automated PDF Receipt Generator
+  // Automated PDF Receipt Generator
   const generatePDFReceipt = () => {
     if (calculatedValue === null) return;
 
     const doc = new jsPDF();
     const primaryGold = [212, 175, 55];
-    const darkBg = [17, 22, 34];
+    const darkBg = [15, 23, 42];
 
     // Header Background Accent
     doc.setFillColor(darkBg[0], darkBg[1], darkBg[2]);
@@ -106,7 +108,7 @@ function App() {
     doc.text("ASSET DESCRIPTION", 20, 86.5);
     doc.text("WEIGHT", 90, 86.5);
     doc.text("SPOT RATE", 125, 86.5);
-    doc.text("GROSS VALUE", 160, 86.5);
+    doc.text("BASE VALUE", 160, 86.5);
 
     // Table Row Data
     const metalLabels = {
@@ -131,11 +133,11 @@ function App() {
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(9);
-    doc.text("Gross Material Value:", 25, 120);
+    doc.text("Base Gold Pricing Value:", 25, 120);
     doc.text(`$${grossValue.toFixed(2)} USD`, 175, 120, { align: 'right' });
 
-    doc.text(`Store Processing / Margin Fee:`, 25, 128);
-    doc.text(`-$${fee.toFixed(2)} USD`, 175, 128, { align: 'right' });
+    doc.text(`Custom Store Processing Fee / Add-on:`, 25, 128);
+    doc.text(`+$${feeAmount.toFixed(2)} USD`, 175, 128, { align: 'right' });
 
     doc.setDrawColor(212, 175, 55);
     doc.line(25, 133, 185, 133);
@@ -143,7 +145,7 @@ function App() {
     doc.setTextColor(17, 22, 34);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("FINAL ESTIMATED CLIENT PAYOUT:", 25, 141);
+    doc.text("FINAL ESTIMATED CLIENT GROSS:", 25, 141);
     doc.setTextColor(22, 163, 74); // Emerald Green
     doc.setFontSize(13);
     doc.text(`$${calculatedValue.toFixed(2)} USD`, 175, 141, { align: 'right' });
@@ -187,16 +189,14 @@ function App() {
 
         {metals && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '25px', width: '100%' }}>
-            
-            {/* 📊 INTERACTIVE MELT VALUATION WIDGET WITH FEE SLIDER */}
             <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '25px', border: '1px solid rgba(212, 175, 55, 0.25)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)' }}>
               <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#d4af37', fontWeight: '400', letterSpacing: '1px', textTransform: 'uppercase' }}>Melt Value & Fee Calculator</h3>
-              
+
               <form onSubmit={handleCalculate} style={{ display: 'flex', flexDirection: 'column', gap: '14px', textAlign: 'left', fontFamily: 'sans-serif' }}>
                 <div>
                   <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>WEIGHT (GRAMS)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     step="any"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
@@ -207,7 +207,7 @@ function App() {
 
                 <div>
                   <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>METAL PURITY SELECTOR</label>
-                  <select 
+                  <select
                     value={selectedMetal}
                     onChange={(e) => setSelectedMetal(e.target.value)}
                     style={{ width: '100%', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none' }}
@@ -219,57 +219,70 @@ function App() {
                   </select>
                 </div>
 
-                {/* 🟢 STORE FEE PERCENTAGE SLIDER */}
-                <div style={{ backgroundColor: 'rgba(7, 10, 18, 0.4)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <span>STORE PROCESSING FEE</span>
-                    <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#d4af37' }}>{feePercentage}%</span>
-                  </div>
-                  <input type="range" min="0" max="30" step="0.5" value={feePercentage} onChange={(e) => setFeePercentage(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#d4af37', cursor: 'pointer' }} />
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>STORE PROCESSING / MARGIN FEE ($ USD)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={customFee}
+                    onChange={(e) => setCustomFee(e.target.value)}
+                    placeholder="0.00"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
+                  />
                 </div>
-                <button type="submit" style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #d4af37 0%, #aa841c 100%)', border: 'none', borderRadius: '8px', color: '#000000', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', letterSpacing: '1px', textTransform: 'uppercase', boxShadow: '0 4px 20px rgba(212, 175, 55, 0.2)' }}>
-                  Calculate Client Payout
-                </button>
-                {calculatedValue !== null && (
-                  <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(56, 239, 125, 0.04)', borderRadius: '10px', border: '1px solid rgba(56, 239, 125, 0.2)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px', fontFamily: 'sans-serif' }}>ESTIMATED NET CLIENT PAYOUT</div>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#38ef7d', marginTop: '4px' }}>${calculatedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'normal' }}>USD</span></div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>Gross: ${grossValue.toFixed(2)} | Fee Deduction: -${feeAmount.toFixed(2)}</div>
-                    <button onClick={generatePDFReceipt} style={{ marginTop: '14px', padding: '10px 20px', background: '#111622', border: '1px solid #38ef7d', color: '#38ef7d', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '0.5px' }}>📥 DOWNLOAD PDF CLIENT RECEIPT</button>
-                  </div>
-                )}
+
+                <button type="submit" style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #d4af37 0%, #aa841c 100%)', border: 'none', borderRadius: '8px', color: '#000000', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', letterSpacing: '1px', textTransform: 'uppercase', boxShadow: '0 4px 20px rgba(212, 175, 55, 0.2)' }}>Calculate Client Total Gross</button>
               </form>
-                
-                {/* LIVE MARKET MATRIX */}
-                <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.35)', borderRadius: '16px', padding: '25px', border: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(212, 175, 55, 0.15)', paddingBottom: '12px' }}>
-                    <h2 style={{ fontSize: '16px', margin: '0', fontWeight: 'normal', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase' }}>Live Market Rates (USD)</h2>
-                    <button type="button" onClick={fetchRates} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#d4af37', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontFamily: 'sans-serif', fontWeight: '600' }}>REFRESH</button>
+
+              {calculatedValue !== null && (
+                <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(56, 239, 125, 0.04)', borderRadius: '10px', border: '1px solid rgba(56, 239, 125, 0.2)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px', fontFamily: 'sans-serif' }}>FINAL ESTIMATED CLIENT GROSS (GOLD + FEES)</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#38ef7d', marginTop: '4px' }}>
+                    ${calculatedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'normal' }}> USD</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    {[
-                      ['GOLD 24K OUNCE', Math.round(metals.gold24kOunce).toLocaleString()],
-                      ['GOLD 24K GRAM', metals.gold24kGram.toFixed(2)],
-                      ['GOLD 21K OUNCE', Math.round(metals.gold21kOunce).toLocaleString()],
-                      ['GOLD 21K GRAM', metals.gold21kGram.toFixed(2)],
-                      ['GOLD 18K OUNCE', Math.round(metals.gold18kOunce).toLocaleString()],
-                      ['GOLD 18K GRAM', metals.gold18kGram.toFixed(2)],
-                      ['SILVER 925 OUNCE', (metals.silver925ItalyGram * 31.1035).toFixed(2)],
-                      ['SILVER 925 ITALY', metals.silver925ItalyGram.toFixed(2)]
-                    ].map(([label, value]) => <div key={label} style={{ textAlign: 'left' }}><div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'sans-serif' }}>{label}</div><div style={{ fontSize: '18px', color: '#ffffff' }}>${value}</div></div>)}
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    Gold Base: ${grossValue.toFixed(2)} | Fee Added: +${feeAmount.toFixed(2)}
                   </div>
                 </div>
-                {/* BRAND FOOTER */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px', fontSize: '13px', fontFamily: 'sans-serif', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '15px', width: '100%' }}>
-                  <a href="https://queenjewelryllc.com" target="_blank" rel="noreferrer" style={{ color: '#d4af37', textDecoration: 'none', fontWeight: '600' }}>Official Website</a>
-                  <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
-                  <a href="https://facebook.com" target="_blank" rel="noreferrer" style={{ color: '#4facfe', textDecoration: 'none', fontWeight: '600' }}>Facebook Page</a>
-                </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
+        {/* DOWNLOAD PDF RECEIPT BUTTON */}
+        <button onClick={generatePDFReceipt} style={{ marginTop: '14px', padding: '10px 20px', background: '#111622', border: '1px solid #38ef7d', color: '#38ef7d', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '0.5px' }}>
+          📥 DOWNLOAD PDF CLIENT RECEIPT
+        </button>
+
+        {/* LIVE MARKET MATRIX */}
+        <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.35)', borderRadius: '16px', padding: '25px', border: '1px solid rgba(255, 255, 255, 0.03)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(212, 175, 55, 0.15)', paddingBottom: '12px' }}>
+            <h2 style={{ fontSize: '16px', margin: 0, fontWeight: 'normal', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase' }}>Live Market Rates (USD)</h2>
+            <button onClick={fetchRates} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#d4af37', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontFamily: 'sans-serif', fontWeight: '600' }}>REFRESH</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div>OUNCE PRICING
+              <div>GOLD 24K OUNCE: ${Math.round(metals.gold24kOunce).toLocaleString()}</div>
+              <div>GOLD 21K OUNCE: ${Math.round(metals.gold21kOunce).toLocaleString()}</div>
+              <div>GOLD 18K OUNCE: ${Math.round(metals.gold18kOunce).toLocaleString()}</div>
+              <div>SILVER 925 OUNCE: ${(metals.silver925ItalyGram * 31.1035).toFixed(2)}</div>
+            </div>
+            <div>GRAM PRICING
+              <div>GOLD 24K GRAM: ${metals.gold24kGram.toFixed(2)}</div>
+              <div>GOLD 21K GRAM: ${metals.gold21kGram.toFixed(2)}</div>
+              <div>GOLD 18K GRAM: ${metals.gold18kGram.toFixed(2)}</div>
+              <div>SILVER 925 ITALY: ${metals.silver925ItalyGram.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+        {/* BRAND FOOTER */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px', fontSize: '13px', fontFamily: 'sans-serif', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '15px', width: '100%' }}>
+          <a href="https://queenjewelryllc.com" target="_blank" rel="noreferrer">Official Website</a>
+          <a href="https://facebook.com" target="_blank" rel="noreferrer">Facebook Page</a>
         </div>
       </div>
-    );
+    </div>
+      );
 }
+
 export default App;
