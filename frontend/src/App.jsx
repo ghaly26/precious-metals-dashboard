@@ -57,12 +57,6 @@ function App() {
     setCheckDate(new Date().toLocaleString());
   };
 
-  useEffect(() => {
-    if (weight && metals) {
-      handleCalculate();
-    }
-  }, [customFee, selectedMetal, metals]);
-
   const generatePDFReceipt = () => {
     if (calculatedValue === null) return;
 
