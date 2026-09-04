@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import resend from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -195,12 +196,12 @@ app.post('/api/send-quote', async (req, res) => {
         </ul>
       </div>
     `;
-
+    // Initialize API key for Resend email service
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
       const emailPayload = {
-        from: 'Queen Jewelry Portal <info@queenjewelryllc.com>',
+        from: 'Queen Jewelry Portal <admin@queenjewelryllc.com>',
         to: ['info@queenjewelryllc.com'],
         subject: emailSubject,
         html: emailHtmlContent,
