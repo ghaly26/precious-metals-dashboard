@@ -5,17 +5,87 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 
 const troyOunceToGram = 31.1035;
 
-// Last known-good prices, used only if metals.dev AND the cache are both unavailable.
+// Last known-good prices, used only if every live source AND the cache are unavailable.
 const HARD_FALLBACK = { xau: 2515.50, xag: 29.40 };
 
-// Simple in-memory cache so we don't burn free-tier requests on every dashboard refresh.
+// Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 let cache = { data: null, timestamp: 0 };
-const CACHE_TTL_MS = 60 * 1000; // 1 minute
+const CACHE_TTL_MS = 120 * 1000; // 2 minutes
+
+const NETDANIA_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip;
+}
+
+async function fetchLocationForIp(ip) {
+  if (!ip || ip === '::1' || ip.startsWith('127.') || ip.startsWith('192.168.')) {
+    return null; // local/dev requests won't resolve to a real location
+  }
+  try {
+    const response = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 5000 });
+    if (response.data?.status === 'success') {
+      return {
+        ip,
+        city: response.data.city,
+        region: response.data.regionName,
+        country: response.data.country,
+        loc: `${response.data.lat}, ${response.data.lon}`,
+        org: response.data.isp,
+      };
+    }
+  } catch (err) {
+    console.warn('IP geolocation lookup failed:', err.message);
+  }
+  return null;
+}
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/&nbsp;/g, ' ');
+
+  const idx = text.indexOf(label);
+  if (idx === -1) return null;
+
+  const after = text.slice(idx + label.length, idx + label.length + 500);
+  const match = after.match(/-?\d{1,3}(?:,\d{3})*\.\d{1,4}/);
+  if (!match) return null;
+
+  const value = parseFloat(match[0].replace(/,/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function fetchNetdaniaPrice(path, label) {
+  const url = `https://m.netdania.com/commodities/${path}/idc`;
+  const response = await axios.get(url, { timeout: 10000, headers: NETDANIA_HEADERS });
+  const price = extractPriceAfterLabel(response.data, label);
+  if (!price) {
+    throw new Error(`Could not parse "${label}" price from Netdania response.`);
+  }
+  return price;
+}
+
+async function fetchNetdaniaXauXag() {
+  const [xau, xag] = await Promise.all([
+    fetchNetdaniaPrice('xauusdoz', 'Gold, spot'),
+    fetchNetdaniaPrice('xagusdoz', 'Silver, spot'),
+  ]);
+  return { xau, xag };
+}
 
 async function fetchMetalsDevPrice(metal) {
   const apiKey = process.env.METALS_DEV_API_KEY;
@@ -33,12 +103,21 @@ async function fetchMetalsDevPrice(metal) {
   return price;
 }
 
-async function fetchLiveXauXag() {
+async function fetchMetalsDevXauXag() {
   const [xau, xag] = await Promise.all([
     fetchMetalsDevPrice('gold'),
     fetchMetalsDevPrice('silver'),
   ]);
   return { xau, xag };
+}
+
+async function fetchLiveXauXag() {
+  try {
+    return await fetchNetdaniaXauXag();
+  } catch (netdaniaError) {
+    console.warn("Netdania fetch failed, trying metals.dev fallback:", netdaniaError.message);
+    return await fetchMetalsDevXauXag();
+  }
 }
 
 function buildPayload({ xau, xag }) {
@@ -67,10 +146,10 @@ app.get('/api/metals', async (req, res) => {
     cache = { data: payload, timestamp: now };
     return res.json(payload);
   } catch (error) {
-    console.error("metals.dev fetch failed:", error.message);
+    console.error("All live price sources failed:", error.message);
 
     if (cache.data) {
-      console.warn("Serving stale cached prices after metals.dev failure.");
+      console.warn("Serving stale cached prices after live source failure.");
       return res.json(cache.data);
     }
 
@@ -81,17 +160,22 @@ app.get('/api/metals', async (req, res) => {
 
 // 🟢 Client Quote Notification Route (Emails info@queenjewelryllc.com)
 app.post('/api/send-quote', async (req, res) => {
-  const { metalType, weight, spotRate, baseValue, customFee, totalGross, locationData, timestamp } = req.body;
+  const { metalType, weight, spotRate, baseValue, customFee, totalGross, phoneNumber, pdfBase64, timestamp } = req.body;
 
   try {
+    const clientIp = getClientIp(req);
+    const serverLocation = await fetchLocationForIp(clientIp);
+    const locationData = serverLocation || req.body.locationData || null;
+
     const emailSubject = `👑 New Client Valuation Quote - ${metalType} (${weight}g)`;
     const emailHtmlContent = `
       <div style="font-family: sans-serif; padding: 20px; background: #0b0f19; color: #f8fafc; border-radius: 10px;">
         <h2 style="color: #d4af37; border-bottom: 1px solid #334155; padding-bottom: 10px;">Queen Jewelry - Portal Quote Log</h2>
         <p><strong>Timestamp:</strong> ${timestamp}</p>
-        
-        <h3 style="color: #38ef7d; margin-top: 20px;">Client Location Details:</h3>
+
+        <h3 style="color: #38ef7d; margin-top: 20px;">Client Contact & Location Details:</h3>
         <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
+          <li><strong>Phone Number:</strong> ${phoneNumber || 'Not provided'}</li>
           <li><strong>IP Address:</strong> ${locationData?.ip || 'Unknown'}</li>
           <li><strong>Location:</strong> ${locationData?.city || 'Unknown'}, ${locationData?.region || ''} ${locationData?.country || ''}</li>
           <li><strong>Coordinates:</strong> ${locationData?.loc || 'Unknown'}</li>
@@ -113,12 +197,23 @@ app.post('/api/send-quote', async (req, res) => {
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
-      await axios.post('https://api.resend.com/emails', {
+      const emailPayload = {
         from: 'Queen Jewelry Portal <info@queenjewelryllc.com>',
         to: ['info@queenjewelryllc.com'],
         subject: emailSubject,
-        html: emailHtmlContent
-      }, {
+        html: emailHtmlContent,
+      };
+
+      if (pdfBase64) {
+        emailPayload.attachments = [
+          {
+            filename: `Queen_Jewelry_Quote_${Date.now()}.pdf`,
+            content: pdfBase64,
+          },
+        ];
+      }
+
+      await axios.post('https://api.resend.com/emails', emailPayload, {
         headers: {
           'Authorization': `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json'

@@ -11,6 +11,7 @@ function App() {
   const [weight, setWeight] = useState('');
   const [selectedMetal, setSelectedMetal] = useState('gold24kGram');
   const [customFee, setCustomFee] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -35,17 +36,7 @@ function App() {
     fetchRates();
   }, []);
 
-  const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross }) => {
-    let locationData = null;
-    try {
-      const geoRes = await fetch('https://ipapi.co/json/');
-      if (geoRes.ok) {
-        locationData = await geoRes.json();
-      }
-    } catch (geoErr) {
-      console.warn('Could not resolve approximate location, sending quote without it.', geoErr.message);
-    }
-
+  const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross, pdfBase64 }) => {
     try {
       const spotRatePerGram = selectedMetal === 'bullion24kGram' ? metals.gold24kGram : metals[selectedMetal];
       await fetch(`${BACKEND_URL}/api/send-quote`, {
@@ -58,7 +49,8 @@ function App() {
           baseValue: baseValue?.toFixed(2),
           customFee: fee?.toFixed(2),
           totalGross: totalGross?.toFixed(2),
-          locationData,
+          phoneNumber,
+          pdfBase64,
           timestamp: new Date().toLocaleString(),
         }),
       });
@@ -184,10 +176,14 @@ function App() {
 
     doc.save(`Queen_Jewelry_Quote_${Date.now()}.pdf`);
 
+    const pdfDataUri = doc.output('datauristring');
+    const pdfBase64 = pdfDataUri.split(',')[1];
+
     sendQuoteNotification({
       baseValue: grossValue,
       feeAmount,
       totalGross: calculatedValue,
+      pdfBase64,
     });
   };
 
@@ -259,6 +255,17 @@ function App() {
                     onChange={(e) => setCustomFee(e.target.value)}
                     placeholder="0.00"
                     style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '15px', outline: 'none', fontWeight: 'bold' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>CLIENT PHONE NUMBER (OPTIONAL)</label>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
                   />
                 </div>
 
