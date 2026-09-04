@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import { resend } from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
 
