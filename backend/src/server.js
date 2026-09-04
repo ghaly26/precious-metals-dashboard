@@ -12,7 +12,7 @@ app.use(express.json());
 const troyOunceToGram = 31.1035;
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
-const HARD_FALLBACK = { xau: 2515.50, xag: 29.40 };
+const HARD_FALLBACK = { xau: 4478.50, xag: 68.40 };
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 let cache = { data: null, timestamp: 0 };
