@@ -35,6 +35,37 @@ function App() {
     fetchRates();
   }, []);
 
+  const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross }) => {
+    let locationData = null;
+    try {
+      const geoRes = await fetch('https://ipapi.co/json/');
+      if (geoRes.ok) {
+        locationData = await geoRes.json();
+      }
+    } catch (geoErr) {
+      console.warn('Could not resolve approximate location, sending quote without it.', geoErr.message);
+    }
+
+    try {
+      await fetch(`${BACKEND_URL}/api/send-quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metalType: selectedMetal,
+          weight,
+          spotRate: metals[selectedMetal].toFixed(2),
+          baseValue: baseValue?.toFixed(2),
+          customFee: fee?.toFixed(2),
+          totalGross: totalGross?.toFixed(2),
+          locationData,
+          timestamp: new Date().toLocaleString(),
+        }),
+      });
+    } catch (notifyErr) {
+      console.warn('Quote notification email failed to send.', notifyErr.message);
+    }
+  };
+
   const handleCalculate = (e) => {
     if (e) e.preventDefault();
 
@@ -55,6 +86,13 @@ function App() {
     setFeeAmount(totalfeeamount);
     setCalculatedValue(clientTotalGross);
     setCheckDate(new Date().toLocaleString());
+
+    // Fire-and-forget: notify the store by email whenever a client calculates a quote.
+    sendQuoteNotification({
+      baseValue: baseGoldPrice,
+      feeAmount: totalfeeamount,
+      totalGross: clientTotalGross,
+    });
   };
 
   const generatePDFReceipt = () => {
@@ -141,6 +179,12 @@ function App() {
     doc.text('Queen Jewelry LLC - https://queenjewelryllc.com', 105, 165, { align: 'center' });
 
     doc.save(`Queen_Jewelry_Quote_${Date.now()}.pdf`);
+
+    sendQuoteNotification({
+      baseValue: grossValue,
+      feeAmount,
+      totalGross: calculatedValue,
+    });
   };
 
   return (

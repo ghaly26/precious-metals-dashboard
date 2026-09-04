@@ -23,7 +23,7 @@ async function fetchMetalsDevPrice(metal) {
     throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
   }
 
-  const url = `https://metals.dev{apiKey}&metal=${metal}&currency=USD`;
+  const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
   const response = await axios.get(url, { timeout: 10000 });
 
   const price = response.data?.rate?.price;
@@ -113,8 +113,7 @@ app.post('/api/send-quote', async (req, res) => {
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
-      // 🟢 FIXED: Adjusted path routing layout to hit Resend's real email gateway endpoint instead of the home website domain
-      await axios.post('https://resend.com', {
+      await axios.post('https://api.resend.com/emails', {
         from: 'Queen Jewelry Portal <info@queenjewelryllc.com>',
         to: ['info@queenjewelryllc.com'],
         subject: emailSubject,
