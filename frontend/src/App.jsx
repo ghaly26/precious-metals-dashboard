@@ -47,13 +47,14 @@ function App() {
     }
 
     try {
+      const spotRatePerGram = selectedMetal === 'bullion24kGram' ? metals.gold24kGram : metals[selectedMetal];
       await fetch(`${BACKEND_URL}/api/send-quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           metalType: selectedMetal,
           weight,
-          spotRate: metals[selectedMetal].toFixed(2),
+          spotRate: spotRatePerGram.toFixed(2),
           baseValue: baseValue?.toFixed(2),
           customFee: fee?.toFixed(2),
           totalGross: totalGross?.toFixed(2),
@@ -76,10 +77,10 @@ function App() {
       return;
     }
 
-    const ratePerGram = metals[selectedMetal];
+    const ratePerGram = selectedMetal === 'bullion24kGram' ? metals.gold24kGram : metals[selectedMetal];
     const baseGoldPrice = Number(weight) * ratePerGram;
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
-    const totalfeeamount = fee * Number(weight);
+    const totalfeeamount = selectedMetal === 'bullion24kGram' ? fee : fee * Number(weight);
     const clientTotalGross = baseGoldPrice + totalfeeamount;
 
     setGrossValue(baseGoldPrice);
@@ -140,7 +141,10 @@ function App() {
       gold21kGram: 'Gold 21K Karat',
       gold18kGram: 'Gold 18K Karat',
       silver925ItalyGram: 'Silver 925 Sterling',
+      bullion24kGram: 'Bullion Jewelry 24K',
     };
+
+    const pdfRatePerGram = selectedMetal === 'bullion24kGram' ? metals.gold24kGram : metals[selectedMetal];
 
     doc.setFillColor(255, 255, 255);
     doc.rect(15, 90, 180, 12, 'F');
@@ -148,7 +152,7 @@ function App() {
     doc.setFont('helvetica', 'normal');
     doc.text(metalLabels[selectedMetal], 20, 97.5);
     doc.text(`${Number(weight).toFixed(2)} g`, 90, 97.5);
-    doc.text(`$${metals[selectedMetal].toFixed(2)} /g`, 125, 97.5);
+    doc.text(`$${pdfRatePerGram.toFixed(2)} /g`, 125, 97.5);
     doc.text(`$${grossValue.toFixed(2)}`, 160, 97.5);
 
     doc.setFillColor(248, 250, 252);
@@ -240,11 +244,14 @@ function App() {
                     <option value="gold21kGram">Gold 21K (Per Gram)</option>
                     <option value="gold18kGram">Gold 18K (Per Gram)</option>
                     <option value="silver925ItalyGram">Silver 925 Italy (Per Gram)</option>
+                    <option value="bullion24kGram">Bullion Jewelry 24K (Per Gram)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>STORE PROCESSING / MARGIN FEE ($/Gram)</label>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
+                    {selectedMetal === 'bullion24kGram' ? 'STORE PROCESSING / MARGIN FEE ($, FLAT)' : 'STORE PROCESSING / MARGIN FEE ($/Gram)'}
+                  </label>
                   <input
                     type="number"
                     step="any"
