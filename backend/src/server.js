@@ -52,6 +52,8 @@ async function fetchLocationForIp(ip) {
   }
   return null;
 }
+
+function extractPriceAfterLabel(html, label) {
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
