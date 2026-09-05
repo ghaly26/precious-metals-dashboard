@@ -13,7 +13,7 @@ app.use(express.json());
 const troyOunceToGram = 31.1035;
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
-const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
+const HARD_FALLBACK = { xau: 4428.72, xag: 66.08 }; // USD per troy ounce
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
@@ -120,30 +120,30 @@ function buildPayload({ xau, xag }) {
   };
 }
 
-app.get('/api/metals', async (req, res) => {
-  const now = Date.now();
+// app.get('/api/metals', async (req, res) => {
+//   const now = Date.now();
 
-  if (cache.data && now - cache.timestamp < CACHE_TTL_MS) {
-    return res.json(cache.data);
-  }
+//   if (cache.data && now - cache.timestamp < CACHE_TTL_MS) {
+//     return res.json(cache.data);
+//   }
 
-  try {
-    const prices = await fetchLiveXauXag();
-    const payload = buildPayload(prices);
-    cache = { data: payload, timestamp: now };
-    return res.json(payload);
-  } catch (error) {
-    console.error("All live price sources failed:", error.message);
+//   try {
+//     const prices = await fetchLiveXauXag();
+//     const payload = buildPayload(prices);
+//     cache = { data: payload, timestamp: now };
+//     return res.json(payload);
+//   } catch (error) {
+//     console.error("All live price sources failed:", error.message);
 
-    if (cache.data) {
-      console.warn("Serving stale cached prices after live source failure.");
-      return res.json(cache.data);
-    }
+//     if (cache.data) {
+//       console.warn("Serving stale cached prices after live source failure.");
+//       return res.json(cache.data);
+//     }
 
-    console.warn("No cache available, serving hardcoded fallback prices.");
-    return res.json(buildPayload(HARD_FALLBACK));
-  }
-});
+//     console.warn("No cache available, serving hardcoded fallback prices.");
+//     return res.json(buildPayload(HARD_FALLBACK));
+//   }
+// });
 
 async function sendResendEmail({ subject, html, attachments }) {
   const resendApiKey = process.env.RESEND_API_KEY;
