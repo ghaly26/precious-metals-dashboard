@@ -120,20 +120,20 @@ function buildPayload({ xau, xag }) {
   };
 }
 
-// app.get('/api/metals', async (req, res) => {
-//   const now = Date.now();
+app.get('/api/metals', async (req, res) => {
+  const now = Date.now();
 
-//   if (cache.data && now - cache.timestamp < CACHE_TTL_MS) {
-//     return res.json(cache.data);
-//   }
+  if (cache.data && now - cache.timestamp < CACHE_TTL_MS) {
+    return res.json(cache.data);
+  }
 
-//   try {
-//     const prices = await fetchLiveXauXag();
-//     const payload = buildPayload(prices);
-//     cache = { data: payload, timestamp: now };
-//     return res.json(payload);
-//   } catch (error) {
-//     console.error("All live price sources failed:", error.message);
+  try {
+    const prices = await fetchLiveXauXag();
+    const payload = buildPayload(prices);
+    cache = { data: payload, timestamp: now };
+    return res.json(payload);
+  } catch (error) {
+    console.error("All live price sources failed:", error.message);
 
     if (cache.data) {
       console.warn("Serving stale cached prices after live source failure.");
