@@ -135,15 +135,15 @@ function buildPayload({ xau, xag }) {
 //   } catch (error) {
 //     console.error("All live price sources failed:", error.message);
 
-//     if (cache.data) {
-//       console.warn("Serving stale cached prices after live source failure.");
-//       return res.json(cache.data);
-//     }
+    if (cache.data) {
+      console.warn("Serving stale cached prices after live source failure.");
+      return res.json(cache.data);
+    }
 
-//     console.warn("No cache available, serving hardcoded fallback prices.");
-//     return res.json(buildPayload(HARD_FALLBACK));
-//   }
-// });
+    console.warn("No cache available, serving hardcoded fallback prices.");
+    return res.json(buildPayload(HARD_FALLBACK));
+  }
+});
 
 async function sendResendEmail({ subject, html, attachments }) {
   const resendApiKey = process.env.RESEND_API_KEY;
