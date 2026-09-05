@@ -14,7 +14,7 @@ const troyOunceToGram = 31.1035;
 
 // 🧪 TEMPORARY TEST TOGGLE: set to false to skip goldprice.dev and metals.dev
 // entirely and always serve HARD_FALLBACK below. Flip back to true when done testing.
-const USE_LIVE_SOURCES = false;
+const USE_LIVE_SOURCES = true;
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
 const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
