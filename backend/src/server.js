@@ -12,8 +12,12 @@ app.use(express.json());
 
 const troyOunceToGram = 31.1035;
 
+// 🧪 TEMPORARY TEST TOGGLE: set to false to skip goldprice.dev and metals.dev
+// entirely and always serve HARD_FALLBACK below. Flip back to true when done testing.
+const USE_LIVE_SOURCES = false;
+
 // Last known-good prices, used only if every live source AND the cache are unavailable.
-const HARD_FALLBACK = { xau: 4428.72, xag: 66.08 }; // USD per troy ounce
+const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
@@ -51,54 +55,57 @@ async function fetchLocationForIp(ip) {
   return null;
 }
 
-// async function fetchGoldpriceDevPrice(metal) {
-//   // /v1/convert is documented as free for both XAU and XAG (unlike /v1/prices,
-//   // whose silver row is gated to paid tiers). Works with or without an API key.
-//   const apiKey = process.env.GOLDPRICE_DEV_API_KEY;
-//   const url = `https://api.goldprice.dev/v1/convert?from=${metal}&to=USD&amount=1&unit=oz`;
-//   const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+async function fetchGoldpriceDevPrice(metal) {
+  // /v1/convert is documented as free for both XAU and XAG (unlike /v1/prices,
+  // whose silver row is gated to paid tiers). Works with or without an API key.
+  const apiKey = process.env.GOLDPRICE_DEV_API_KEY;
+  const url = `https://api.goldprice.dev/v1/convert?from=${metal}&to=USD&amount=1&unit=oz`;
+  const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 
-//   const response = await axios.get(url, { timeout: 10000, headers });
-//   const price = parseFloat(response.data?.result);
-//   if (!Number.isFinite(price) || price <= 0) {
-//     throw new Error(`goldprice.dev returned no usable price for ${metal}.`);
-//   }
-//   return price;
-// }
+  const response = await axios.get(url, { timeout: 10000, headers });
+  const price = parseFloat(response.data?.result);
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(`goldprice.dev returned no usable price for ${metal}.`);
+  }
+  return price;
+}
 
-// async function fetchGoldpriceDevXauXag() {
-//   const [xau, xag] = await Promise.all([
-//     fetchGoldpriceDevPrice('XAU'),
-//     fetchGoldpriceDevPrice('XAG'),
-//   ]);
-//   return { xau, xag };
-// }
+async function fetchGoldpriceDevXauXag() {
+  const [xau, xag] = await Promise.all([
+    fetchGoldpriceDevPrice('XAU'),
+    fetchGoldpriceDevPrice('XAG'),
+  ]);
+  return { xau, xag };
+}
 
-// async function fetchMetalsDevPrice(metal) {
-//   const apiKey = process.env.METALS_DEV_API_KEY;
-//   if (!apiKey) {
-//     throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
-//   }
+async function fetchMetalsDevPrice(metal) {
+  const apiKey = process.env.METALS_DEV_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing METALS_DEV_API_KEY in server configuration.");
+  }
 
-//   const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
-//   const response = await axios.get(url, { timeout: 10000 });
+  const url = `https://api.metals.dev/v1/metal/spot?api_key=${apiKey}&metal=${metal}&currency=USD`;
+  const response = await axios.get(url, { timeout: 10000 });
 
-//   const price = response.data?.rate?.price;
-//   if (!price || typeof price !== 'number') {
-//     throw new Error(`metals.dev returned no usable price for ${metal}.`);
-//   }
-//   return price;
-// }
+  const price = response.data?.rate?.price;
+  if (!price || typeof price !== 'number') {
+    throw new Error(`metals.dev returned no usable price for ${metal}.`);
+  }
+  return price;
+}
 
-// async function fetchMetalsDevXauXag() {
-//   const [xau, xag] = await Promise.all([
-//     fetchMetalsDevPrice('gold'),
-//     fetchMetalsDevPrice('silver'),
-//   ]);
-//   return { xau, xag };
-// }
+async function fetchMetalsDevXauXag() {
+  const [xau, xag] = await Promise.all([
+    fetchMetalsDevPrice('gold'),
+    fetchMetalsDevPrice('silver'),
+  ]);
+  return { xau, xag };
+}
 
 async function fetchLiveXauXag() {
+  if (!USE_LIVE_SOURCES) {
+    throw new Error("USE_LIVE_SOURCES is false — skipping live sources for testing.");
+  }
   try {
     return await fetchGoldpriceDevXauXag();
   } catch (goldpriceError) {
