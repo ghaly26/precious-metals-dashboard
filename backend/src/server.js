@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 dotenv.config();
 
 const app = express();
@@ -15,8 +16,10 @@ const troyOunceToGram = 31.1035;
 const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
+// 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
+// and metals.dev's 100/mo free-tier caps, even with steady daytime traffic.
 let cache = { data: null, timestamp: 0 };
-const CACHE_TTL_MS = 120 * 1000; // 2 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
@@ -142,6 +145,31 @@ app.get('/api/metals', async (req, res) => {
   }
 });
 
+async function sendResendEmail({ subject, html, attachments }) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    console.log("⚠️ RESEND_API_KEY missing in environment variables. Email simulation logged only.");
+    return;
+  }
+
+  const emailPayload = {
+    from: 'Queen Jewelry Portal <admin@queenjewelryllc.com>',
+    to: ['info@queenjewelryllc.com'],
+    subject,
+    html,
+  };
+  if (attachments) {
+    emailPayload.attachments = attachments;
+  }
+
+  await axios.post('https://api.resend.com/emails', emailPayload, {
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 // 🟢 Client Quote Notification Route (Emails info@queenjewelryllc.com)
 app.post('/api/send-quote', async (req, res) => {
   const { metalType, weight, spotRate, baseValue, customFee, totalGross, phoneNumber, pdfBase64, timestamp } = req.body;
@@ -181,28 +209,10 @@ app.post('/api/send-quote', async (req, res) => {
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
-      const emailPayload = {
-        from: 'Queen Jewelry Portal <admin@queenjewelryllc.com>',
-        to: ['info@queenjewelryllc.com'],
-        subject: emailSubject,
-        html: emailHtmlContent,
-      };
-
-      if (pdfBase64) {
-        emailPayload.attachments = [
-          {
-            filename: `Queen_Jewelry_Quote_${Date.now()}.pdf`,
-            content: pdfBase64,
-          },
-        ];
-      }
-
-      await axios.post('https://api.resend.com/emails', emailPayload, {
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const attachments = pdfBase64
+        ? [{ filename: `Queen_Jewelry_Quote_${Date.now()}.pdf`, content: pdfBase64 }]
+        : undefined;
+      await sendResendEmail({ subject: emailSubject, html: emailHtmlContent, attachments });
       console.log("📨 Quote notification email sent successfully to info@queenjewelryllc.com");
     } else {
       console.log("⚠️ RESEND_API_KEY missing in environment variables. Email simulation logged only.");
@@ -212,6 +222,58 @@ app.post('/api/send-quote', async (req, res) => {
   } catch (error) {
     console.error("Quote email dispatch failure:", error.response?.data || error.message);
     res.status(500).json({ success: false, error: "Failed to process quote notification." });
+  }
+});
+
+// 🟢 Weekly reminder email: real usage numbers from goldprice.dev, plus a nudge
+// to check metals.dev's dashboard manually (no public usage API on their free tier).
+async function checkQuotaAndNotify() {
+  let goldpriceUsage = null;
+  try {
+    const apiKey = process.env.GOLDPRICE_DEV_API_KEY;
+    if (apiKey) {
+      const response = await axios.get('https://api.goldprice.dev/v1/account/usage', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 10000,
+      });
+      goldpriceUsage = response.data;
+    }
+  } catch (err) {
+    console.warn('Could not fetch goldprice.dev usage for weekly reminder:', err.message);
+  }
+
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; background: #0b0f19; color: #f8fafc; border-radius: 10px;">
+      <h2 style="color: #d4af37;">📊 Weekly API Quota Check-In</h2>
+      <p>Time for your weekly check on the metals price API accounts.</p>
+      <h3 style="color: #38ef7d;">goldprice.dev (auto-checked)</h3>
+      <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
+        <li><strong>Calls this month:</strong> ${goldpriceUsage?.calls_this_month ?? 'Unable to fetch — check dashboard'}</li>
+        <li><strong>Calls today:</strong> ${goldpriceUsage?.calls_today ?? 'N/A'}</li>
+      </ul>
+      <h3 style="color: #00f2fe;">metals.dev (please check manually)</h3>
+      <p>No public usage API on the free tier — log in to <a href="https://metals.dev" style="color:#d4af37;">metals.dev</a> to confirm you're within your 100/month limit.</p>
+    </div>
+  `;
+
+  try {
+    await sendResendEmail({ subject: '📊 Queen Jewelry — Weekly API Quota Check-In', html });
+    console.log('📨 Weekly quota reminder email sent.');
+  } catch (err) {
+    console.error('Weekly quota reminder email failed:', err.response?.data || err.message);
+  }
+}
+
+// Runs every Saturday at 9:00 AM Central Time (Fort Worth, TX).
+cron.schedule('0 9 * * 6', checkQuotaAndNotify, { timezone: 'America/Chicago' });
+
+// Manual trigger for testing the weekly reminder without waiting for Saturday.
+app.get('/api/test-quota-email', async (req, res) => {
+  try {
+    await checkQuotaAndNotify();
+    res.json({ success: true, message: 'Quota reminder email triggered.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
