@@ -172,7 +172,7 @@ function App() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text('Terms: This quote is calculated dynamically based on live market spot feeds and is valid for same-day store transactions.', 105, 160, { align: 'center' });
-    doc.text('Queen Jewelry LLC - https://queenjewelryllc.com', 105, 165, { align: 'center' });
+    doc.text('Queen Jewelry LLC - https://queenjewelryllc.com', 135, 195, { align: 'center' });
 
     doc.save(`Queen_Jewelry_Quote_${Date.now()}.pdf`);
 
