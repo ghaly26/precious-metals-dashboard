@@ -18,11 +18,6 @@ const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
 let cache = { data: null, timestamp: 0 };
 const CACHE_TTL_MS = 120 * 1000; // 2 minutes
 
-const NETDANIA_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-};
-
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) {
@@ -53,38 +48,25 @@ async function fetchLocationForIp(ip) {
   return null;
 }
 
-function extractPriceAfterLabel(html, label) {
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, '\n')
-    .replace(/&nbsp;/g, ' ');
+async function fetchGoldpriceDevPrice(metal) {
+  // /v1/convert is documented as free for both XAU and XAG (unlike /v1/prices,
+  // whose silver row is gated to paid tiers). Works with or without an API key.
+  const apiKey = process.env.GOLDPRICE_DEV_API_KEY;
+  const url = `https://api.goldprice.dev/v1/convert?from=${metal}&to=USD&amount=1&unit=oz`;
+  const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 
-  const idx = text.indexOf(label);
-  if (idx === -1) return null;
-
-  const after = text.slice(idx + label.length, idx + label.length + 500);
-  const match = after.match(/-?\d{1,3}(?:,\d{3})*\.\d{1,4}/);
-  if (!match) return null;
-
-  const value = parseFloat(match[0].replace(/,/g, ''));
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-async function fetchNetdaniaPrice(path, label) {
-  const url = `https://m.netdania.com/commodities/${path}/idc`;
-  const response = await axios.get(url, { timeout: 10000, headers: NETDANIA_HEADERS });
-  const price = extractPriceAfterLabel(response.data, label);
-  if (!price) {
-    throw new Error(`Could not parse "${label}" price from Netdania response.`);
+  const response = await axios.get(url, { timeout: 10000, headers });
+  const price = parseFloat(response.data?.result);
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(`goldprice.dev returned no usable price for ${metal}.`);
   }
   return price;
 }
 
-async function fetchNetdaniaXauXag() {
+async function fetchGoldpriceDevXauXag() {
   const [xau, xag] = await Promise.all([
-    fetchNetdaniaPrice('xauusdoz', 'Gold, spot'),
-    fetchNetdaniaPrice('xagusdoz', 'Silver, spot'),
+    fetchGoldpriceDevPrice('XAU'),
+    fetchGoldpriceDevPrice('XAG'),
   ]);
   return { xau, xag };
 }
@@ -115,9 +97,9 @@ async function fetchMetalsDevXauXag() {
 
 async function fetchLiveXauXag() {
   try {
-    return await fetchNetdaniaXauXag();
-  } catch (netdaniaError) {
-    console.warn("Netdania fetch failed, trying metals.dev fallback:", netdaniaError.message);
+    return await fetchGoldpriceDevXauXag();
+  } catch (goldpriceError) {
+    console.warn("goldprice.dev fetch failed, trying metals.dev fallback:", goldpriceError.message);
     return await fetchMetalsDevXauXag();
   }
 }
