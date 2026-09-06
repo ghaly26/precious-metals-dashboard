@@ -6,6 +6,7 @@ const BACKEND_URL = 'https://precious-metals-dashboard.onrender.com';
 function App() {
   const [metals, setMetals] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [slowLoading, setSlowLoading] = useState(false);
   const [error, setError] = useState('');
 
   const [weight, setWeight] = useState('');
@@ -19,7 +20,11 @@ function App() {
 
   const fetchRates = async () => {
     setLoading(true);
+    setSlowLoading(false);
     setError('');
+
+    const slowTimer = setTimeout(() => setSlowLoading(true), 6000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/metals`);
       if (!res.ok) throw new Error('Server error fetching live market data');
@@ -28,7 +33,9 @@ function App() {
     } catch (err) {
       setError(err.message);
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
+      setSlowLoading(false);
     }
   };
 
@@ -208,7 +215,29 @@ function App() {
           </p>
         </div>
 
-        {loading && <p style={{ color: '#94a3b8', fontSize: '13px', fontFamily: 'sans-serif' }}>📡 Fetching live commodity index ticks...</p>}
+        {loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '20px 0' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                border: '3px solid rgba(212, 175, 55, 0.15)',
+                borderTopColor: '#d4af37',
+                borderRadius: '50%',
+                animation: 'spin 0.9s linear infinite',
+              }}
+            />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <p style={{ color: '#94a3b8', fontSize: '13px', fontFamily: 'sans-serif', margin: 0, textAlign: 'center' }}>
+              📡 Fetching live commodity index ticks...
+            </p>
+            {slowLoading && (
+              <p style={{ color: '#64748b', fontSize: '11px', fontFamily: 'sans-serif', margin: 0, textAlign: 'center', maxWidth: '280px' }}>
+                Still working — our server is waking up from idle, this can take up to 30 seconds on the first visit.
+              </p>
+            )}
+          </div>
+        )}
         {error && <p style={{ color: '#ff4a77', background: 'rgba(255, 74, 119, 0.1)', padding: '10px', borderRadius: '8px', fontFamily: 'sans-serif' }}>{error}</p>}
 
         {metals && (
