@@ -14,7 +14,7 @@ const troyOunceToGram = 31.1035;
 
 // 🧪 TEMPORARY TEST TOGGLE: set to false to skip goldprice.dev and metals.dev
 // entirely and always serve HARD_FALLBACK below. Flip back to true when done testing.
-const USE_LIVE_SOURCES = false; // Set to true in production
+const USE_LIVE_SOURCES = true; // Set to true in production
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
 const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
@@ -23,7 +23,7 @@ const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
 // and metals.dev's 100/mo free-tier caps, even with steady daytime traffic.
 let cache = { data: null, timestamp: 0 };
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
@@ -153,7 +153,7 @@ app.get('/api/metals', async (req, res) => {
 });
 
 const verificationCodes = new Map();
-const VERIFICATION_CODE_EXPIRY_MS = 10 * 60 * 1000;
+const VERIFICATION_CODE_EXPIRY_MS = 5 * 60 * 1000;
 
 function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -207,7 +207,7 @@ app.post('/api/send-verification-code', async (req, res) => {
           <h2>Queen Jewelry Invoice Verification</h2>
           <p>Your verification code is:</p>
           <h1 style="letter-spacing:8px;">${code}</h1>
-          <p>This code expires in 10 minutes.</p>
+          <p>This code expires in 5 minutes.</p>
         </div>
       `
     });
