@@ -14,7 +14,7 @@ const troyOunceToGram = 31.1035;
 
 // 🧪 TEMPORARY TEST TOGGLE: set to false to skip goldprice.dev and metals.dev
 // entirely and always serve HARD_FALLBACK below. Flip back to true when done testing.
-const USE_LIVE_SOURCES = false; // Set to true in production
+const USE_LIVE_SOURCES = false;
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
 const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
@@ -179,7 +179,7 @@ async function sendResendEmail({ subject, html, attachments }) {
 
 // 🟢 Client Quote Notification Route (Emails info@queenjewelryllc.com)
 app.post('/api/send-quote', async (req, res) => {
-  const { metalType, weight, spotRate, baseValue, customFee, totalGross, phoneNumber, pdfBase64, timestamp } = req.body;
+  const { metalType, weight, spotRate, baseValue, customFee, totalGross, phoneNumber, clientName, clientAddress, documentType, itemCount, pdfBase64, timestamp } = req.body;
 
   try {
     const clientIp = getClientIp(req);
@@ -194,6 +194,10 @@ app.post('/api/send-quote', async (req, res) => {
 
         <h3 style="color: #38ef7d; margin-top: 20px;">Client Contact & Location Details:</h3>
         <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
+          <li><strong>Document Type:</strong> ${documentType === 'invoice' ? 'Invoice' : 'Quote'}</li>
+          <li><strong>Client Name:</strong> ${clientName || 'Not provided'}</li>
+          <li><strong>Client Address:</strong> ${clientAddress || 'Not provided'}</li>
+          <li><strong>Number of Items:</strong> ${itemCount || 1}</li>
           <li><strong>Phone Number:</strong> ${phoneNumber || 'Not provided'}</li>
           <li><strong>IP Address:</strong> ${locationData?.ip || 'Unknown'}</li>
           <li><strong>Location:</strong> ${locationData?.city || 'Unknown'}, ${locationData?.region || ''} ${locationData?.country || ''}</li>
@@ -282,6 +286,51 @@ app.get('/api/test-quota-email', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// 🔐 Invoice verification gate: generates a one-time code, emails it to the
+// store's own inbox (not the client's), and checks a submitted code against it.
+let pendingVerification = null; // { code, expiresAt }
+
+app.post('/api/send-verification-code', async (req, res) => {
+  try {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    pendingVerification = { code, expiresAt: Date.now() + 10 * 60 * 1000 };
+
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px; background: #0b0f19; color: #f8fafc; border-radius: 10px;">
+        <h2 style="color: #d4af37;">🔐 Invoice Verification Code</h2>
+        <p>A client is requesting an invoice on the Queen Jewelry dashboard. Verification code:</p>
+        <p style="font-size: 32px; letter-spacing: 6px; color: #38ef7d; font-weight: bold;">${code}</p>
+        <p style="color: #94a3b8; font-size: 12px;">This code expires in 10 minutes. If this wasn't expected, ignore this email.</p>
+      </div>
+    `;
+
+    await sendResendEmail({ subject: '🔐 Queen Jewelry — Invoice Verification Code', html });
+    console.log('📨 Verification code email sent.');
+    res.json({ success: true, message: 'Verification code sent.' });
+  } catch (error) {
+    console.error('Verification code email failed:', error.response?.data || error.message);
+    res.status(500).json({ success: false, error: 'Failed to send verification code.' });
+  }
+});
+
+app.post('/api/verify-code', (req, res) => {
+  const { code } = req.body;
+
+  if (!pendingVerification) {
+    return res.json({ valid: false, reason: 'No verification code has been requested yet.' });
+  }
+  if (Date.now() > pendingVerification.expiresAt) {
+    pendingVerification = null;
+    return res.json({ valid: false, reason: 'Code expired. Please request a new one.' });
+  }
+  if (code !== pendingVerification.code) {
+    return res.json({ valid: false, reason: 'Incorrect code.' });
+  }
+
+  pendingVerification = null; // one-time use
+  res.json({ valid: true });
 });
 
 const port = process.env.PORT || 5000;
