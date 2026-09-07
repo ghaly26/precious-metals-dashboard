@@ -152,6 +152,13 @@ app.get('/api/metals', async (req, res) => {
   }
 });
 
+const verificationCodes = new Map();
+const VERIFICATION_CODE_EXPIRY_MS = 10 * 60 * 1000;
+
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 async function sendResendEmail({ subject, html, attachments }) {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
@@ -176,6 +183,65 @@ async function sendResendEmail({ subject, html, attachments }) {
     },
   });
 }
+
+app.post('/api/send-verification-code', async (req, res) => {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'RESEND_API_KEY is not configured.'
+      });
+    }
+
+    const code = generateVerificationCode();
+
+    verificationCodes.set('invoice', {
+      code,
+      expiresAt: Date.now() + VERIFICATION_CODE_EXPIRY_MS
+    });
+
+    await sendResendEmail({
+      subject: '🔐 Queen Jewelry Invoice Verification Code',
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;">
+          <h2>Queen Jewelry Invoice Verification</h2>
+          <p>Your verification code is:</p>
+          <h1 style="letter-spacing:8px;">${code}</h1>
+          <p>This code expires in 10 minutes.</p>
+        </div>
+      `
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(
+      'Verification email failed:',
+      error.response?.data || error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send verification email.'
+    });
+  }
+});
+
+app.post('/api/verify-code', (req, res) => {
+  const { code } = req.body;
+  const saved = verificationCodes.get('invoice');
+
+  if (!saved || Date.now() > saved.expiresAt) {
+    verificationCodes.delete('invoice');
+    return res.json({ valid: false });
+  }
+
+  if (code !== saved.code) {
+    return res.json({ valid: false });
+  }
+
+  verificationCodes.delete('invoice');
+  res.json({ valid: true });
+});
 
 // 🟢 Client Quote Notification Route (Emails info@queenjewelryllc.com)
 app.post('/api/send-quote', async (req, res) => {
