@@ -16,11 +16,10 @@ function App() {
   const [customFee, setCustomFee] = useState('');
   const [customRatePerGram, setCustomRatePerGram] = useState('');
   const [chargeFeePerGram, setChargeFeePerGram] = useState('yes'); // invoice + custom only
-  const [customAssetDescription, setCustomAssetDescription] = useState('');
+  const [items, setItems] = useState([{ id: 1, description: '', weight: '' }]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [customClientName, setCustomClientName] = useState('');
   const [customClientAddress, setCustomClientAddress] = useState('');
-  const [itemCount, setItemCount] = useState(1);
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -34,8 +33,48 @@ function App() {
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
 
+  const addItem = () => {
+    setItems((prev) => (prev.length >= 10 ? prev : [...prev, { id: Date.now(), description: '', weight: '' }]));
+  };
+
+  const removeItem = (id) => {
+    setItems((prev) => (prev.length <= 1 ? prev : prev.filter((it) => it.id !== id)));
+  };
+
+  const updateItem = (id, field, value) => {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)));
+  };
+
+  const resetFormFields = () => {
+    setWeight('');
+    setSelectedMetal('gold24kGram');
+    setCustomFee('');
+    setCustomRatePerGram('');
+    setChargeFeePerGram('yes');
+    setItems([{ id: Date.now(), description: '', weight: '' }]);
+    setPhoneNumber('');
+    setCustomClientName('');
+    setCustomClientAddress('');
+    setCalculatedValue(null);
+    setGrossValue(null);
+    setFeeAmount(null);
+    setCheckDate('');
+    setVerificationVerified(false);
+    setVerificationModalOpen(false);
+    setVerificationCodeInput('');
+    setVerificationError('');
+  };
+
+  const handleDocumentTypeChange = (e) => {
+    setDocumentType(e.target.value);
+    resetFormFields();
+  };
+
   const isInvoice = documentType === 'invoice';
   const isCustomMetal = selectedMetal === 'custom';
+  // Custom items and any invoice always use the itemized entry list; a plain
+  // Quote for a standard karat keeps the original single-weight field.
+  const useItemizedEntry = isCustomMetal || isInvoice;
   const noFeeMode = isInvoice && isCustomMetal && chargeFeePerGram === 'no';
   const requiredInvoiceFieldsFilled =
     customClientName.trim() !== '' && phoneNumber.trim() !== '' && customClientAddress.trim() !== '';
@@ -95,6 +134,7 @@ function App() {
     }
     if (metalKey === 'bullion24kGram') return metalsData.gold24kGram;
     if (metalKey === 'gold14kGram') return metalsData.gold24kGram * (14 / 24);
+    if (metalKey === 'gold10kGram') return metalsData.gold24kGram * (10 / 24);
     if (metalKey === 'gold9kGram') return metalsData.gold24kGram * (9 / 24);
     return metalsData[metalKey];
   };
@@ -127,6 +167,12 @@ function App() {
   const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross, pdfBase64 }) => {
     try {
       const spotRatePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
+      const itemsSummary = useItemizedEntry
+        ? items
+            .filter((it) => it.weight !== '' && Number(it.weight) > 0)
+            .map((it) => ({ description: it.description.trim() || null, weight: it.weight }))
+        : undefined;
+
       await fetch(`${BACKEND_URL}/api/send-quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,7 +187,7 @@ function App() {
           clientName: customClientName,
           clientAddress: customClientAddress,
           documentType,
-          itemCount,
+          items: itemsSummary,
           pdfBase64,
           timestamp: new Date().toLocaleString(),
         }),
@@ -154,9 +200,6 @@ function App() {
   const handleCalculate = (e) => {
     if (e) e.preventDefault();
 
-    const invalidCustomRate =
-      selectedMetal === 'custom' && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
-
     if (isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified)) {
       setCalculatedValue(null);
       setGrossValue(null);
@@ -164,7 +207,10 @@ function App() {
       return;
     }
 
-    if (!metals || !weight || Number.isNaN(Number(weight)) || Number(weight) <= 0 || invalidCustomRate) {
+    const invalidCustomRate =
+      isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
+
+    if (!metals || invalidCustomRate) {
       setCalculatedValue(null);
       setGrossValue(null);
       setFeeAmount(null);
@@ -172,12 +218,36 @@ function App() {
     }
 
     const ratePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
-    const baseGoldPrice = Number(weight) * ratePerGram;
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
     const customFeeApplies = isInvoice && isCustomMetal && chargeFeePerGram === 'yes';
+
+    let totalWeight;
+
+    if (useItemizedEntry) {
+      const validItems = items.filter(
+        (it) => it.weight !== '' && !Number.isNaN(Number(it.weight)) && Number(it.weight) > 0
+      );
+      if (validItems.length === 0) {
+        setCalculatedValue(null);
+        setGrossValue(null);
+        setFeeAmount(null);
+        return;
+      }
+      totalWeight = validItems.reduce((sum, it) => sum + Number(it.weight), 0);
+    } else {
+      if (!weight || Number.isNaN(Number(weight)) || Number(weight) <= 0) {
+        setCalculatedValue(null);
+        setGrossValue(null);
+        setFeeAmount(null);
+        return;
+      }
+      totalWeight = Number(weight);
+    }
+
+    const baseGoldPrice = totalWeight * ratePerGram;
     const totalfeeamount = selectedMetal === 'custom'
-      ? (customFeeApplies ? fee * Number(weight) : 0)
-      : selectedMetal === 'bullion24kGram' ? fee : fee * Number(weight);
+      ? (customFeeApplies ? fee * totalWeight : 0)
+      : selectedMetal === 'bullion24kGram' ? fee : fee * totalWeight;
     const clientTotalGross = baseGoldPrice + totalfeeamount;
 
     setGrossValue(baseGoldPrice);
@@ -200,9 +270,7 @@ function App() {
     const primaryGold = [212, 175, 55];
     const darkBg = [17, 22, 34];
 
-    // Invoice documents get two extra client-detail lines, which pushes every
-    // section below the info box down by this many mm compared to a Quote.
-    const yOffset = isInvoice ? 14 : 0;
+    // Invoice documents get two extra client-detail lines in the info box.
 
     doc.setFillColor(darkBg[0], darkBg[1], darkBg[2]);
     doc.rect(0, 0, 210, 45, 'F');
@@ -223,11 +291,20 @@ function App() {
     );
     doc.text(`Issued On: ${checkDate}`, 105, 33, { align: 'center' });
 
+    const hasClientInfoQuote = !isInvoice && (customClientName.trim() !== '' || phoneNumber.trim() !== '');
+    const infoYOffset = isInvoice ? 14 : (hasClientInfoQuote ? 7 : 0);
+
     doc.setFillColor(248, 250, 252);
-    doc.rect(15, 52, 180, 26 + yOffset, 'F');
+    doc.rect(15, 52, 180, 26 + infoYOffset, 'F');
     doc.setFontSize(8.5);
     doc.setTextColor(51, 51, 51);
-    doc.text('Store Location: 3725 Summersville Ln, Fort Worth -Texas-USA,76244', 20, 60);
+    doc.text(
+      isInvoice
+        ? 'Store Location: 3725 Summersville Ln, Fort Worth -Texas-USA,76244'
+        : 'Store Location: Flagship Store',
+      20,
+      60
+    );
     doc.setFontSize(10);
     doc.text(
       `Transaction Type: ${isInvoice ? 'Client Online Jewelry Payout' : 'Client Assay Melt Payout'}`,
@@ -239,73 +316,107 @@ function App() {
 
     if (isInvoice) {
       doc.text(`Client Name: ${customClientName}`, 20, 80);
-      doc.text(`Items: ${itemCount}`, 125, 80);
+      doc.text(`Items: ${items.length}`, 125, 80);
       doc.text(`Client Address: ${customClientAddress}`, 20, 86);
       doc.text(`Client Phone: ${phoneNumber}`, 125, 86);
+    } else if (hasClientInfoQuote) {
+      const clientInfoParts = [];
+      if (customClientName.trim()) clientInfoParts.push(`Client: ${customClientName.trim()}`);
+      if (phoneNumber.trim()) clientInfoParts.push(`Phone: ${phoneNumber.trim()}`);
+      doc.text(clientInfoParts.join('   |   '), 20, 81);
     }
 
+    let cursorY = 86 + infoYOffset;
+
     doc.setFillColor(17, 22, 34);
-    doc.rect(15, 86 + yOffset, 180, 10, 'F');
+    doc.rect(15, cursorY, 180, 10, 'F');
     doc.setTextColor(212, 175, 55);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('ASSET DESCRIPTION', 20, 92.5 + yOffset);
-    doc.text('WEIGHT', 90, 92.5 + yOffset);
-    doc.text('SPOT RATE', 125, 92.5 + yOffset);
-    doc.text('BASE VALUE', 160, 92.5 + yOffset);
+    doc.text('ASSET DESCRIPTION', 20, cursorY + 6.5);
+    doc.text('WEIGHT', 90, cursorY + 6.5);
+    doc.text('SPOT RATE', 125, cursorY + 6.5);
+    doc.text('BASE VALUE', 160, cursorY + 6.5);
+    cursorY += 10;
 
     const metalLabels = {
       gold24kGram: 'Gold 24K Pure',
       gold21kGram: 'Gold 21K Karat',
       gold18kGram: 'Gold 18K Karat',
       gold14kGram: 'Gold 14K Karat',
+      gold10kGram: 'Gold 10K Karat',
       gold9kGram: 'Gold 9K Karat',
       silver925ItalyGram: 'Silver 925 Sterling',
       bullion24kGram: 'Bullion Jewelry 24K',
       custom: 'Custom Item',
     };
 
-    const assetDescriptionText = isCustomMetal
-      ? (customAssetDescription.trim() || 'Custom Item')
-      : metalLabels[selectedMetal];
-
     const pdfRatePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
 
-    doc.setFillColor(255, 255, 255);
-    doc.rect(15, 96 + yOffset, 180, 12, 'F');
-    doc.setTextColor(30, 41, 59);
+    // Itemized entry (Custom, or any Invoice) draws one row per item, each
+    // priced individually. A plain Quote for a standard karat draws the
+    // original single row driven by the simple weight field.
+    const rows = useItemizedEntry
+      ? items
+          .filter((it) => it.weight !== '' && !Number.isNaN(Number(it.weight)) && Number(it.weight) > 0)
+          .map((it) => ({
+            description: it.description.trim() || metalLabels[selectedMetal],
+            weight: Number(it.weight),
+          }))
+      : [{ description: metalLabels[selectedMetal], weight: Number(weight) }];
+
     doc.setFont('helvetica', 'normal');
-    doc.text(assetDescriptionText, 20, 103.5 + yOffset);
-    doc.text(`${Number(weight).toFixed(2)} g`, 90, 103.5 + yOffset);
-    doc.text(`$${pdfRatePerGram.toFixed(2)} /g`, 125, 103.5 + yOffset);
-    doc.text(`$${grossValue.toFixed(2)}`, 160, 103.5 + yOffset);
+    doc.setFontSize(9);
+    const descriptionColWidth = 65; // mm available before the WEIGHT column starts at x=90
+
+    rows.forEach((row) => {
+      const wrappedLines = doc.splitTextToSize(row.description, descriptionColWidth);
+      const rowHeight = Math.max(12, wrappedLines.length * 5 + 4);
+      const rowBaseValue = row.weight * pdfRatePerGram;
+
+      doc.setFillColor(255, 255, 255);
+      doc.rect(15, cursorY, 180, rowHeight, 'F');
+      doc.setTextColor(30, 41, 59);
+      wrappedLines.forEach((line, idx) => {
+        doc.text(line, 20, cursorY + 7 + idx * 5);
+      });
+      doc.text(`${row.weight.toFixed(2)} g`, 90, cursorY + 7);
+      doc.text(`$${pdfRatePerGram.toFixed(2)} /g`, 125, cursorY + 7);
+      doc.text(`$${rowBaseValue.toFixed(2)}`, 160, cursorY + 7);
+
+      cursorY += rowHeight;
+    });
+
+    cursorY += 4;
 
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, 116 + yOffset, 180, 36, 3, 3, 'F');
+    doc.roundedRect(15, cursorY, 180, 36, 3, 3, 'F');
 
     const goldValueLabel = noFeeMode ? 'Gold Pricing Value (Fee Included):' : 'Base Gold Pricing Value:';
     const finalLabel = noFeeMode ? 'FINAL CLIENT GROSS:' : 'FINAL ESTIMATED CLIENT GROSS:';
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(9);
-    doc.text(goldValueLabel, 25, 126 + yOffset);
-    doc.text(`$${grossValue.toFixed(2)} USD`, 175, 126 + yOffset, { align: 'right' });
+    doc.text(goldValueLabel, 25, cursorY + 10);
+    doc.text(`$${grossValue.toFixed(2)} USD`, 175, cursorY + 10, { align: 'right' });
 
     if (!noFeeMode) {
-      doc.text('Custom Store Processing Fee / Add-on:', 25, 134 + yOffset);
-      doc.text(`+$${feeAmount.toFixed(2)} USD`, 175, 134 + yOffset, { align: 'right' });
+      doc.text('Custom Store Processing Fee / Add-on:', 25, cursorY + 18);
+      doc.text(`+$${feeAmount.toFixed(2)} USD`, 175, cursorY + 18, { align: 'right' });
     }
 
     doc.setDrawColor(212, 175, 55);
-    doc.line(25, 139 + yOffset, 185, 139 + yOffset);
+    doc.line(25, cursorY + 23, 185, cursorY + 23);
 
     doc.setTextColor(17, 22, 34);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(finalLabel, 25, 147 + yOffset);
+    doc.text(finalLabel, 25, cursorY + 31);
     doc.setTextColor(22, 163, 74);
     doc.setFontSize(13);
-    doc.text(`$${calculatedValue.toFixed(2)} USD`, 175, 147 + yOffset, { align: 'right' });
+    doc.text(`$${calculatedValue.toFixed(2)} USD`, 175, cursorY + 31, { align: 'right' });
+
+    cursorY += 36;
 
     doc.setTextColor(148, 163, 184);
     doc.setFont('helvetica', 'normal');
@@ -315,18 +426,18 @@ function App() {
         ? 'Terms: This invoice is calculated dynamically based on live market spot feeds and is valid for same-day store transactions.'
         : 'Terms: This quote is calculated dynamically based on live market spot feeds and is valid for same-day store transactions.',
       105,
-      166 + yOffset,
+      cursorY + 14,
       { align: 'center' }
     );
-    doc.text('Queen Jewelry LLC - https://queenjewelryllc.com', 105, 171 + yOffset, { align: 'center' });
+    doc.text('Queen Jewelry LLC - https://queenjewelryllc.com', 105, cursorY + 19, { align: 'center' });
 
     if (isInvoice) {
-      // Stamp sits centered, just under the two terms lines, sized to its
-      // cleaned white-background image's ~1.08:1 aspect ratio.
-      const stampWidth = 30;
+      // Stamp sits centered, just under the two terms lines. Bumped up from
+      // 30mm to 38mm wide per request, sized to its ~1.08:1 aspect ratio.
+      const stampWidth = 38;
       const stampHeight = stampWidth * (488 / 528);
       const stampX = (210 - stampWidth) / 2;
-      const stampY = 171 + yOffset + 8;
+      const stampY = cursorY + 19 + 8;
       doc.addImage(STAMP_IMAGE_BASE64, 'PNG', stampX, stampY, stampWidth, stampHeight);
     }
 
@@ -399,24 +510,12 @@ function App() {
                   <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>DOCUMENT TYPE</label>
                   <select
                     value={documentType}
-                    onChange={(e) => setDocumentType(e.target.value)}
+                    onChange={handleDocumentTypeChange}
                     style={{ width: '100%', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none' }}
                   >
                     <option value="quote">Quote</option>
                     <option value="invoice">Invoice</option>
                   </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>WEIGHT (GRAMS)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="0.00"
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
-                  />
                 </div>
 
                 <div>
@@ -430,12 +529,69 @@ function App() {
                     <option value="gold21kGram">Gold 21K (Per Gram)</option>
                     <option value="gold18kGram">Gold 18K (Per Gram)</option>
                     <option value="gold14kGram">Gold 14K (Per Gram)</option>
+                    <option value="gold10kGram">Gold 10K (Per Gram)</option>
                     <option value="gold9kGram">Gold 9K (Per Gram)</option>
                     <option value="silver925ItalyGram">Silver 925 Italy (Per Gram)</option>
                     <option value="bullion24kGram">Bullion Jewelry 24K (Per Gram)</option>
                     <option value="custom">Custom (Manual Entry)</option>
                   </select>
                 </div>
+
+                {useItemizedEntry ? (
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '8px', letterSpacing: '1px', fontWeight: '600' }}>
+                      ITEMS (DESCRIPTION + WEIGHT)
+                    </label>
+                    {items.map((item, idx) => (
+                      <div key={item.id} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                          placeholder={`Item ${idx + 1} description`}
+                          style={{ flex: 2, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                        />
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.weight}
+                          onChange={(e) => updateItem(item.id, 'weight', e.target.value)}
+                          placeholder="Weight (g)"
+                          style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                        />
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item.id)}
+                            style={{ padding: '10px 12px', background: 'transparent', border: '1px solid rgba(255,74,119,0.4)', color: '#ff4a77', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      disabled={items.length >= 10}
+                      style={{ width: '100%', padding: '8px', background: 'transparent', border: '1px dashed rgba(212,175,55,0.4)', color: '#d4af37', borderRadius: '6px', fontSize: '12px', cursor: items.length >= 10 ? 'default' : 'pointer', opacity: items.length >= 10 ? 0.5 : 1 }}
+                    >
+                      + Add Item {items.length >= 10 ? '(max 10)' : ''}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>WEIGHT (GRAMS)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={weight}
+                      onChange={(e) => setWeight(e.target.value)}
+                      placeholder="0.00"
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
+                    />
+                  </div>
+                )}
 
                 {selectedMetal === 'custom' ? (
                   <>
@@ -452,21 +608,6 @@ function App() {
                         style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '15px', outline: 'none', fontWeight: 'bold' }}
                       />
                     </div>
-
-                    {isInvoice && (
-                      <div>
-                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                          ASSET DESCRIPTION
-                        </label>
-                        <input
-                          type="text"
-                          value={customAssetDescription}
-                          onChange={(e) => setCustomAssetDescription(e.target.value)}
-                          placeholder="e.g. Custom Necklace"
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
-                        />
-                      </div>
-                    )}
 
                     {isInvoice && (
                       <div>
@@ -558,21 +699,6 @@ function App() {
                         required
                         style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
                       />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                        HOW MANY ITEMS
-                      </label>
-                      <select
-                        value={itemCount}
-                        onChange={(e) => setItemCount(Number(e.target.value))}
-                        style={{ width: '100%', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none' }}
-                      >
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
                     </div>
 
                     <div style={{ padding: '14px', background: 'rgba(212, 175, 55, 0.05)', borderRadius: '8px', border: '1px solid rgba(212, 175, 55, 0.15)' }}>
