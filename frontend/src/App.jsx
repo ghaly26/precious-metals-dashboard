@@ -19,7 +19,10 @@ function App() {
   const [items, setItems] = useState([{ id: 1, description: '', weight: '' }]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [customClientName, setCustomClientName] = useState('');
-  const [customClientAddress, setCustomClientAddress] = useState('');
+  const [clientStreetAddress, setClientStreetAddress] = useState('');
+  const [clientCity, setClientCity] = useState('');
+  const [clientState, setClientState] = useState('');
+  const [clientZip, setClientZip] = useState('');
   const [calculatedValue, setCalculatedValue] = useState(null);
   const [grossValue, setGrossValue] = useState(null);
   const [feeAmount, setFeeAmount] = useState(null);
@@ -32,6 +35,12 @@ function App() {
   const [verificationVerified, setVerificationVerified] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
+
+  // USPS shipping label (Invoice mode only)
+  const [printShippingLabel, setPrintShippingLabel] = useState('no');
+  const [labelGenerating, setLabelGenerating] = useState(false);
+  const [labelError, setLabelError] = useState('');
+  const [labelResult, setLabelResult] = useState(null); // { trackingNumber, postage, labelPdfBase64 }
 
   const addItem = () => {
     setItems((prev) => (prev.length >= 10 ? prev : [...prev, { id: Date.now(), description: '', weight: '' }]));
@@ -54,7 +63,10 @@ function App() {
     setItems([{ id: Date.now(), description: '', weight: '' }]);
     setPhoneNumber('');
     setCustomClientName('');
-    setCustomClientAddress('');
+    setClientStreetAddress('');
+    setClientCity('');
+    setClientState('');
+    setClientZip('');
     setCalculatedValue(null);
     setGrossValue(null);
     setFeeAmount(null);
@@ -76,13 +88,17 @@ function App() {
   // Quote for a standard karat keeps the original single-weight field.
   const useItemizedEntry = isCustomMetal || isInvoice;
   const noFeeMode = isInvoice && isCustomMetal && chargeFeePerGram === 'no';
+  const clientAddressCombined = `${clientStreetAddress}, ${clientCity}, ${clientState} ${clientZip}`.trim();
+
   const requiredInvoiceFieldsFilled =
-    customClientName.trim() !== '' && phoneNumber.trim() !== '' && customClientAddress.trim() !== '';
+    customClientName.trim() !== '' && phoneNumber.trim() !== '' &&
+    clientStreetAddress.trim() !== '' && clientCity.trim() !== '' &&
+    clientState.trim() !== '' && clientZip.trim() !== '';
 
   // Re-verification is required if identity details change after a code was verified.
   useEffect(() => {
     setVerificationVerified(false);
-  }, [documentType, customClientName, phoneNumber, customClientAddress]);
+  }, [documentType, customClientName, phoneNumber, clientStreetAddress, clientCity, clientState, clientZip]);
 
   const sendVerificationCode = async () => {
     setVerificationError('');
@@ -185,7 +201,7 @@ function App() {
           totalGross: totalGross?.toFixed(2),
           phoneNumber,
           clientName: customClientName,
-          clientAddress: customClientAddress,
+          clientAddress: clientAddressCombined,
           documentType,
           items: itemsSummary,
           pdfBase64,
@@ -263,6 +279,52 @@ function App() {
     });
   };
 
+  const requestShippingLabel = async () => {
+    setLabelGenerating(true);
+    setLabelError('');
+    setLabelResult(null);
+    try {
+      const totalWeightGrams = useItemizedEntry
+        ? items.reduce((sum, it) => sum + (Number(it.weight) || 0), 0)
+        : Number(weight) || 0;
+      const weightLb = Math.max(totalWeightGrams / 453.592, 0.1); // USPS needs a non-trivial weight
+
+      const res = await fetch(`${BACKEND_URL}/api/create-shipping-label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toAddress: {
+            firstName: customClientName.split(' ')[0] || customClientName,
+            lastName: customClientName.split(' ').slice(1).join(' ') || '',
+            streetAddress: clientStreetAddress,
+            city: clientCity,
+            state: clientState,
+            ZIPCode: clientZip,
+          },
+          weightLb,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLabelResult(data);
+      } else {
+        setLabelError(data.error || 'Could not generate the shipping label.');
+      }
+    } catch (err) {
+      setLabelError('Could not reach the shipping label service.');
+    } finally {
+      setLabelGenerating(false);
+    }
+  };
+
+  const downloadShippingLabel = () => {
+    if (!labelResult?.labelPdfBase64) return;
+    const link = document.createElement('a');
+    link.href = `data:application/pdf;base64,${labelResult.labelPdfBase64}`;
+    link.download = `USPS_Label_${labelResult.trackingNumber || Date.now()}.pdf`;
+    link.click();
+  };
+
   const generatePDFReceipt = () => {
     if (calculatedValue === null) return;
 
@@ -317,7 +379,7 @@ function App() {
     if (isInvoice) {
       doc.text(`Client Name: ${customClientName}`, 20, 80);
       doc.text(`Items: ${items.length}`, 125, 80);
-      doc.text(`Client Address: ${customClientAddress}`, 20, 86);
+      doc.text(`Client Address: ${clientAddressCombined}`, 20, 86);
       doc.text(`Client Phone: ${phoneNumber}`, 125, 86);
     } else if (hasClientInfoQuote) {
       const clientInfoParts = [];
@@ -689,16 +751,60 @@ function App() {
                   <>
                     <div>
                       <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                        CLIENT ADDRESS (REQUIRED)
+                        CLIENT STREET ADDRESS (REQUIRED)
                       </label>
                       <input
                         type="text"
-                        value={customClientAddress}
-                        onChange={(e) => setCustomClientAddress(e.target.value)}
-                        placeholder="Street, city, state, zip"
+                        value={clientStreetAddress}
+                        onChange={(e) => setClientStreetAddress(e.target.value)}
+                        placeholder="123 Main St"
                         required
                         style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
                       />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ flex: 2 }}>
+                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
+                          CITY (REQUIRED)
+                        </label>
+                        <input
+                          type="text"
+                          value={clientCity}
+                          onChange={(e) => setClientCity(e.target.value)}
+                          placeholder="Fort Worth"
+                          required
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
+                          STATE
+                        </label>
+                        <input
+                          type="text"
+                          value={clientState}
+                          onChange={(e) => setClientState(e.target.value.toUpperCase())}
+                          placeholder="TX"
+                          maxLength={2}
+                          required
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none', textTransform: 'uppercase' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
+                          ZIP
+                        </label>
+                        <input
+                          type="text"
+                          value={clientZip}
+                          onChange={(e) => setClientZip(e.target.value)}
+                          placeholder="76244"
+                          maxLength={10}
+                          required
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '12px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '15px', outline: 'none' }}
+                        />
+                      </div>
                     </div>
 
                     <div style={{ padding: '14px', background: 'rgba(212, 175, 55, 0.05)', borderRadius: '8px', border: '1px solid rgba(212, 175, 55, 0.15)' }}>
@@ -771,6 +877,57 @@ function App() {
                   >
                     📥 DOWNLOAD PDF CLIENT RECEIPT
                   </button>
+
+                  {isInvoice && (
+                    <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px dashed rgba(255,255,255,0.08)', textAlign: 'left' }}>
+                      <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
+                        PRINT USPS SHIPPING LABEL?
+                      </label>
+                      <select
+                        value={printShippingLabel}
+                        onChange={(e) => { setPrintShippingLabel(e.target.value); setLabelResult(null); setLabelError(''); }}
+                        style={{ width: '100%', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+
+                      {printShippingLabel === 'yes' && (
+                        <div style={{ marginTop: '12px' }}>
+                          <button
+                            type="button"
+                            onClick={requestShippingLabel}
+                            disabled={labelGenerating}
+                            style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#d4af37', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: labelGenerating ? 'default' : 'pointer' }}
+                          >
+                            {labelGenerating ? 'Generating label...' : '🖨️ Generate Shipping Label'}
+                          </button>
+
+                          {labelError && (
+                            <p style={{ color: '#ff4a77', fontSize: '11px', marginTop: '8px' }}>{labelError}</p>
+                          )}
+
+                          {labelResult && (
+                            <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(56,239,125,0.05)', borderRadius: '8px', border: '1px solid rgba(56,239,125,0.2)' }}>
+                              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 4px 0' }}>
+                                Tracking: <span style={{ color: '#fff' }}>{labelResult.trackingNumber}</span>
+                              </p>
+                              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0' }}>
+                                Postage: <span style={{ color: '#38ef7d' }}>${labelResult.postage}</span>
+                              </p>
+                              <button
+                                type="button"
+                                onClick={downloadShippingLabel}
+                                style={{ width: '100%', padding: '10px', background: '#111622', border: '1px solid #38ef7d', color: '#38ef7d', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                              >
+                                📥 DOWNLOAD SHIPPING LABEL
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

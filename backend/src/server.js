@@ -362,5 +362,181 @@ app.get('/api/test-quota-email', async (req, res) => {
   }
 });
 
+// 🟢 USPS Shipping Label Integration (Invoice mode only)
+// Two tokens are required by USPS: an OAuth access token, and a separate
+// Payment Authorization token tied to your CRID/MID/account. Both are cached
+// and auto-refreshed shortly before they expire.
+let uspsTokenCache = { token: null, expiresAt: 0 };
+let uspsPaymentTokenCache = { token: null, expiresAt: 0 };
+
+async function getUspsAccessToken() {
+  if (uspsTokenCache.token && Date.now() < uspsTokenCache.expiresAt - 60 * 1000) {
+    return uspsTokenCache.token;
+  }
+
+  const response = await axios.post(
+    'https://apis.usps.com/oauth2/v3/token',
+    {
+      client_id: process.env.USPS_CLIENT_ID,
+      client_secret: process.env.USPS_CLIENT_SECRET,
+      grant_type: 'client_credentials',
+    },
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+
+  const { access_token, expires_in } = response.data;
+  uspsTokenCache = {
+    token: access_token,
+    expiresAt: Date.now() + Number(expires_in) * 1000,
+  };
+  return access_token;
+}
+
+async function getUspsPaymentToken() {
+  if (uspsPaymentTokenCache.token && Date.now() < uspsPaymentTokenCache.expiresAt - 60 * 1000) {
+    return uspsPaymentTokenCache.token;
+  }
+
+  const accessToken = await getUspsAccessToken();
+
+  const crid = process.env.USPS_CRID;
+  const mid = process.env.USPS_MID; // Required — get this from your USPS Business Customer Gateway BSA
+  const manifestMid = process.env.USPS_MANIFEST_MID || mid;
+  const accountType = process.env.USPS_ACCOUNT_TYPE || 'EPS';
+  const accountNumber = process.env.USPS_ACCOUNT_NUMBER;
+
+  if (!crid || !mid || !accountNumber) {
+    throw new Error(
+      'Missing USPS_CRID, USPS_MID, or USPS_ACCOUNT_NUMBER in server configuration. MID must come from your USPS Business Customer Gateway.'
+    );
+  }
+
+  const role = { CRID: crid, MID: mid, manifestMID: manifestMid, accountType, accountNumber };
+
+  const response = await axios.post(
+    'https://apis.usps.com/payments/v3/payment-authorization',
+    { roles: [{ roleName: 'PAYER', ...role }, { roleName: 'LABEL_OWNER', ...role }] },
+    { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+  );
+
+  uspsPaymentTokenCache = {
+    token: response.data.paymentAuthorizationToken,
+    // USPS docs state this token is valid ~8 hours; refresh 5 min early to be safe.
+    expiresAt: Date.now() + (8 * 60 - 5) * 60 * 1000,
+  };
+  return uspsPaymentTokenCache.token;
+}
+
+// USPS's label endpoint returns multipart/form-data (JSON metadata + a PDF
+// part), not plain JSON, so axios's default JSON parsing can't be used —
+// this pulls both parts out of the raw multipart body manually.
+function parseMultipartLabelResponse(contentType, rawBody) {
+  const boundaryMatch = contentType.match(/boundary=(.+)$/);
+  if (!boundaryMatch) {
+    throw new Error('USPS response was not multipart as expected — no boundary found.');
+  }
+  const boundary = `--${boundaryMatch[1].replace(/"/g, '')}`;
+  const parts = rawBody.split(boundary).filter((p) => p.trim() && p.trim() !== '--');
+
+  let labelMetadata = null;
+  let labelImageBase64 = null;
+
+  for (const part of parts) {
+    if (part.includes('name="labelMetadata"')) {
+      const jsonStart = part.indexOf('{');
+      const jsonEnd = part.lastIndexOf('}') + 1;
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        labelMetadata = JSON.parse(part.slice(jsonStart, jsonEnd));
+      }
+    } else if (part.includes('name="labelImage"')) {
+      const afterHeaders = part.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
+      labelImageBase64 = afterHeaders;
+    }
+  }
+
+  return { labelMetadata, labelImageBase64 };
+}
+
+app.post('/api/create-shipping-label', async (req, res) => {
+  const { toAddress, weightLb } = req.body;
+
+  try {
+    const accessToken = await getUspsAccessToken();
+    const paymentToken = await getUspsPaymentToken();
+
+    const labelRequestBody = {
+      imageInfo: {
+        imageType: 'PDF',
+        labelType: '4X6LABEL',
+        receiptOption: 'NONE',
+        suppressPostage: false,
+        suppressMailDate: false,
+        returnLabel: false,
+      },
+      toAddress: {
+        firstName: toAddress.firstName,
+        lastName: toAddress.lastName,
+        streetAddress: toAddress.streetAddress,
+        city: toAddress.city,
+        state: toAddress.state,
+        ZIPCode: toAddress.ZIPCode,
+      },
+      fromAddress: {
+        firstName: 'Queen',
+        lastName: 'Jewelry',
+        firm: 'Queen Jewelry LLC',
+        streetAddress: '3725 Summersville Ln',
+        city: 'Fort Worth',
+        state: 'TX',
+        ZIPCode: '76244',
+      },
+      packageDescription: {
+        mailClass: 'PRIORITY_MAIL',
+        rateIndicator: 'SP',
+        weightUOM: 'lb',
+        weight: weightLb,
+        dimensionsUOM: 'in',
+        length: 9,
+        width: 6,
+        height: 3,
+        processingCategory: 'MACHINABLE',
+        mailingDate: new Date().toISOString().split('T')[0],
+        destinationEntryFacilityType: 'NONE',
+      },
+    };
+
+    const response = await axios.post('https://apis.usps.com/labels/v3/label', labelRequestBody, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Payment-Authorization-Token': paymentToken,
+        'Content-Type': 'application/json',
+      },
+      responseType: 'text', // USPS returns multipart, not JSON — parse it manually below
+    });
+
+    const { labelMetadata, labelImageBase64 } = parseMultipartLabelResponse(
+      response.headers['content-type'],
+      response.data
+    );
+
+    if (!labelImageBase64) {
+      throw new Error('USPS response did not include a label image.');
+    }
+
+    res.json({
+      success: true,
+      trackingNumber: labelMetadata?.trackingNumber,
+      postage: labelMetadata?.postage,
+      labelPdfBase64: labelImageBase64,
+    });
+  } catch (error) {
+    console.error('USPS label creation failed:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.error?.message || error.message || 'Failed to create shipping label.',
+    });
+  }
+});
+
 const port = process.env.PORT || 5000;
 app.listen(port, () => console.log(`🚀 Queen Jewelry Live Metals Server running on port ${port}`));
