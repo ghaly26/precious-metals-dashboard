@@ -567,16 +567,23 @@ app.post('/api/create-shipping-label', async (req, res) => {
       throw new Error('USPS response did not include a label image.');
     }
 
-    // Full dump so we can see USPS's actual field names — "postage" may only
-    // be the base rate, with extra-service fees living in a separate field
-    // (e.g. "fees", "extraServices", "totalPrice") that we haven't found yet.
-    console.log('USPS labelMetadata (full):', JSON.stringify(labelMetadata));
+    // "postage" is only the base package rate — extra-service costs (Signature
+    // Confirmation, Insurance, etc.) live in their own separate array, each
+    // with its own name/price, and need to be summed in for the real total.
+    const basePostage = Number(labelMetadata?.postage) || 0;
+    const extraServicesBreakdown = (labelMetadata?.extraServices || []).map((s) => ({
+      name: s.name,
+      price: Number(s.price) || 0,
+    }));
+    const extraServicesTotal = extraServicesBreakdown.reduce((sum, s) => sum + s.price, 0);
+    const totalPostage = basePostage + extraServicesTotal;
 
     res.json({
       success: true,
       trackingNumber: labelMetadata?.trackingNumber,
-      postage: labelMetadata?.postage,
-      rawMetadata: labelMetadata, // temporary — for debugging the flat-price issue
+      basePostage,
+      extraServicesBreakdown,
+      postage: totalPostage,
       labelPdfBase64: labelImageBase64,
     });
   } catch (error) {

@@ -1130,8 +1130,16 @@ function App() {
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
                 Tracking: <span style={{ color: '#fff' }}>{labelResult.trackingNumber}</span>
               </p>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
-                Postage: <span style={{ color: '#38ef7d' }}>${labelResult.postage}</span>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 4px 0' }}>
+                Base Postage: <span style={{ color: '#fff' }}>${labelResult.basePostage?.toFixed(2)}</span>
+              </p>
+              {labelResult.extraServicesBreakdown?.map((s, i) => (
+                <p key={i} style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 4px 0' }}>
+                  {s.name}: <span style={{ color: '#fff' }}>+${s.price.toFixed(2)}</span>
+                </p>
+              ))}
+              <p style={{ fontSize: '13px', color: '#94a3b8', margin: '6px 0 6px 0', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                Total Postage: <span style={{ color: '#38ef7d', fontWeight: 'bold' }}>${labelResult.postage.toFixed(2)}</span>
               </p>
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
                 Signature: <span style={{ color: '#fff' }}>{signatureOption === 'with' ? 'Required' : 'Not required'}</span>
