@@ -40,7 +40,6 @@ function App() {
   const [printShippingLabel, setPrintShippingLabel] = useState('no');
   const [signatureOption, setSignatureOption] = useState('without'); // 'with' | 'without'
   const [mailingDate, setMailingDate] = useState('');
-  const [packageValue, setPackageValue] = useState('');
   const [labelGenerating, setLabelGenerating] = useState(false);
   const [labelError, setLabelError] = useState('');
   const [labelResult, setLabelResult] = useState(null); // { trackingNumber, postage, labelPdfBase64 }
@@ -317,7 +316,6 @@ function App() {
           weightLb,
           signatureRequired: signatureOption === 'with',
           mailingDate,
-          packageValue: packageValue ? Number(packageValue) : undefined,
         }),
       });
       const data = await res.json();
@@ -933,24 +931,6 @@ function App() {
                             style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none', marginBottom: '10px' }}
                           />
 
-                          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                            PACKAGE VALUE (OPTIONAL, $) — INSURANCE
-                          </label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            value={packageValue}
-                            onChange={(e) => setPackageValue(e.target.value)}
-                            placeholder="0.00"
-                            style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none', marginBottom: Number(packageValue) > 500 ? '4px' : '10px' }}
-                          />
-                          {Number(packageValue) > 500 && (
-                            <p style={{ color: '#f5a623', fontSize: '10px', margin: '0 0 10px 0' }}>
-                              ⚠️ USPS caps insurance payouts for jewelry/precious metals at $500, regardless of declared value.
-                            </p>
-                          )}
-
                           <button
                             type="button"
                             onClick={requestShippingLabel}
@@ -1136,11 +1116,6 @@ function App() {
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
                 Signature: <span style={{ color: '#fff' }}>{signatureOption === 'with' ? 'Required' : 'Not required'}</span>
               </p>
-              {Number(packageValue) > 0 && (
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
-                  Insured Value: <span style={{ color: '#fff' }}>${Number(packageValue).toFixed(2)}</span>
-                </p>
-              )}
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
                 Ship Date: <span style={{ color: '#fff' }}>{mailingDate}</span>
               </p>
