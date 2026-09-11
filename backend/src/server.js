@@ -564,10 +564,33 @@ app.post('/api/create-shipping-label', async (req, res) => {
       labelPdfBase64: labelImageBase64,
     });
   } catch (error) {
-    console.error('USPS label creation failed:', error.response?.data || error.message);
+    // responseType: 'text' means axios won't auto-parse a JSON error body —
+    // it arrives as a raw string, so error.response.data.error.message would
+    // silently be undefined. Parse it manually to get USPS's actual message.
+    let uspsErrorDetail = null;
+    const rawErrorData = error.response?.data;
+    if (rawErrorData) {
+      if (typeof rawErrorData === 'string') {
+        try {
+          uspsErrorDetail = JSON.parse(rawErrorData);
+        } catch {
+          uspsErrorDetail = rawErrorData; // not JSON — keep as-is for logging
+        }
+      } else {
+        uspsErrorDetail = rawErrorData;
+      }
+    }
+
+    console.error('USPS label creation failed:', uspsErrorDetail || error.message);
+
+    const uspsMessage =
+      uspsErrorDetail?.error?.message ||
+      uspsErrorDetail?.error?.errors?.[0]?.detail ||
+      (typeof uspsErrorDetail === 'string' ? uspsErrorDetail : null);
+
     res.status(500).json({
       success: false,
-      error: error.response?.data?.error?.message || error.message || 'Failed to create shipping label.',
+      error: uspsMessage || error.message || 'Failed to create shipping label.',
     });
   }
 });
