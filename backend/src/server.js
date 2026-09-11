@@ -466,14 +466,10 @@ app.post('/api/create-shipping-label', async (req, res) => {
 
     const packageDescription = {
       mailClass: 'PRIORITY_MAIL',
-      // NOTE: "SP" is confirmed working (it's what produced the successful $9.32
-      // by-weight label). It is NOT a flat-rate indicator — USPS bills this as
-      // regular by-weight Priority Mail, not the fixed Flat Rate price. Getting
-      // the actual $10.54 Flat Rate charge requires a different rateIndicator
-      // value we could not confirm from public docs — verify via
-      // POST /prices/v3/base-rates/search (its "description" field will name
-      // what it matched) or the official PDF docs in your USPS dev account.
-      rateIndicator: 'SP',
+      // Confirmed from USPS's official Domestic Labels 3.0 OpenAPI spec:
+      // "FS" = Small Flat Rate Box. This bills the fixed $10.54 flat rate
+      // rather than by-weight pricing (which is what "SP" gave us before).
+      rateIndicator: 'FS',
       weightUOM: 'lb',
       weight: weightLb,
       dimensionsUOM: 'in',
@@ -492,26 +488,21 @@ app.post('/api/create-shipping-label', async (req, res) => {
     const extraServiceCodes = [];
 
     if (signatureRequired) {
-      // NOTE: this numeric code is UNCONFIRMED for the domestic Labels API —
-      // set USPS_SIGNATURE_EXTRA_SERVICE_CODE once you've verified the real
-      // value (see the base-rates search endpoint mentioned above).
-      const signatureCode = process.env.USPS_SIGNATURE_EXTRA_SERVICE_CODE;
-      if (signatureCode) {
-        extraServiceCodes.push(Number(signatureCode));
-      } else {
-        console.warn('signatureRequired was requested but USPS_SIGNATURE_EXTRA_SERVICE_CODE is not set — sending label without it.');
-      }
+      // Confirmed from the official spec: 921 = Signature Confirmation.
+      extraServiceCodes.push(921);
+      // Required whenever a signature extraServices code (921 among others)
+      // is requested. true = physical signature; false allows USPS eSOL
+      // (electronic signature) instead.
+      packageDescription.physicalSignatureRequired = true;
     }
 
     if (packageValue && Number(packageValue) > 0) {
-      // NOTE: code 920 is INFERRED from USPS's own official example (it appears
-      // paired with packageOptions.packageValue in their sample request), not
-      // from an explicit named code table — worth a quick real-world test.
-      // USPS caps insurance payouts at $500 for jewelry/precious metals/coins
-      // regardless of the declared value entered here — that's a USPS policy
-      // limit, not something this code enforces or can change.
-      const insuranceCode = process.env.USPS_INSURANCE_EXTRA_SERVICE_CODE || '920';
-      extraServiceCodes.push(Number(insuranceCode));
+      // Confirmed from the official spec: 930 = Insurance <= $500. USPS
+      // automatically swaps this to 931 (Insurance > $500) server-side if
+      // the declared packageValue exceeds $500 — no action needed here.
+      // Reminder: USPS still caps actual payouts at $500 for jewelry/
+      // precious metals/coins regardless of declared value, per policy.
+      extraServiceCodes.push(930);
       packageDescription.packageOptions = { packageValue: Number(packageValue) };
     }
 
