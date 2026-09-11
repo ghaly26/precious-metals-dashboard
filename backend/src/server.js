@@ -458,7 +458,7 @@ function parseMultipartLabelResponse(contentType, rawBody) {
 }
 
 app.post('/api/create-shipping-label', async (req, res) => {
-  const { toAddress, weightLb, signatureRequired, mailingDate, packageValue } = req.body;
+  const { toAddress, weightLb, signatureRequired, mailingDate } = req.body;
 
   try {
     const accessToken = await getUspsAccessToken();
@@ -488,36 +488,17 @@ app.post('/api/create-shipping-label', async (req, res) => {
       destinationEntryFacilityType: 'NONE',
     };
 
-    // Both signature and insurance ride in the same extraServices array —
-    // collect them together rather than overwriting one with the other.
-    const extraServiceCodes = [];
-
     if (signatureRequired) {
       // NOTE: this numeric code is UNCONFIRMED for the domestic Labels API —
       // set USPS_SIGNATURE_EXTRA_SERVICE_CODE once you've verified the real
-      // value (see the base-rates search endpoint mentioned above).
+      // value (see the base-rates search endpoint mentioned above). Without
+      // it set, signatureRequired is accepted but has no effect yet.
       const signatureCode = process.env.USPS_SIGNATURE_EXTRA_SERVICE_CODE;
       if (signatureCode) {
-        extraServiceCodes.push(Number(signatureCode));
+        packageDescription.extraServices = [Number(signatureCode)];
       } else {
         console.warn('signatureRequired was requested but USPS_SIGNATURE_EXTRA_SERVICE_CODE is not set — sending label without it.');
       }
-    }
-
-    if (packageValue && Number(packageValue) > 0) {
-      // NOTE: code 920 is INFERRED from USPS's own official example (it appears
-      // paired with packageOptions.packageValue in their sample request), not
-      // from an explicit named code table — worth a quick real-world test.
-      // USPS caps insurance payouts at $500 for jewelry/precious metals/coins
-      // regardless of the declared value entered here — that's a USPS policy
-      // limit, not something this code enforces or can change.
-      const insuranceCode = process.env.USPS_INSURANCE_EXTRA_SERVICE_CODE || '920';
-      extraServiceCodes.push(Number(insuranceCode));
-      packageDescription.packageOptions = { packageValue: Number(packageValue) };
-    }
-
-    if (extraServiceCodes.length > 0) {
-      packageDescription.extraServices = extraServiceCodes;
     }
 
     const labelRequestBody = {
