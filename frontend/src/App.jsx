@@ -912,15 +912,15 @@ function App() {
                       {printShippingLabel === 'yes' && (
                         <div style={{ marginTop: '12px' }}>
                           <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                            SIGNATURE
+                            SIGNATURE REQUIRED
                           </label>
                           <select
                             value={signatureOption}
                             onChange={(e) => setSignatureOption(e.target.value)}
                             style={{ width: '100%', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none', marginBottom: '10px' }}
                           >
-                            <option value="without">Without Signature</option>
-                            <option value="with">With Signature</option>
+                            <option value="without">No</option>
+                            <option value="with">Yes</option>
                           </select>
 
                           <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
