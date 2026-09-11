@@ -581,11 +581,19 @@ app.post('/api/create-shipping-label', async (req, res) => {
       }
     }
 
-    console.error('USPS label creation failed:', uspsErrorDetail || error.message);
+    console.error('USPS label creation failed (full detail):', JSON.stringify(uspsErrorDetail) || error.message);
+
+    // Prefer the specific field-level detail (e.g. which property is invalid)
+    // over the generic top-level message like "Bad Request" or "Invalid Request",
+    // which tells us nothing about what actually needs fixing.
+    const specificDetails = uspsErrorDetail?.error?.errors
+      ?.map((e) => e.detail || e.title)
+      .filter(Boolean)
+      .join('; ');
 
     const uspsMessage =
+      specificDetails ||
       uspsErrorDetail?.error?.message ||
-      uspsErrorDetail?.error?.errors?.[0]?.detail ||
       (typeof uspsErrorDetail === 'string' ? uspsErrorDetail : null);
 
     res.status(500).json({
