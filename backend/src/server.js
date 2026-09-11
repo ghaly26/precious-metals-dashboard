@@ -468,21 +468,20 @@ app.post('/api/create-shipping-label', async (req, res) => {
       mailClass: 'PRIORITY_MAIL',
       // NOTE: "SP" is confirmed working (it's what produced the successful $9.32
       // by-weight label). It is NOT a flat-rate indicator — USPS bills this as
-      // regular by-weight Priority Mail. The dimensions below match a real
-      // Priority Mail Flat Rate Small Box, but matching a box's physical size
-      // does not by itself switch USPS to flat-rate pricing; that requires a
-      // specific rateIndicator value we could not confirm from public docs.
-      // Verify the correct value via POST /prices/v3/base-rates/search (it
-      // returns a human-readable "description" field) before relying on this
-      // for actual flat-rate billing.
+      // regular by-weight Priority Mail, not the fixed Flat Rate price. Getting
+      // the actual $10.54 Flat Rate charge requires a different rateIndicator
+      // value we could not confirm from public docs — verify via
+      // POST /prices/v3/base-rates/search (its "description" field will name
+      // what it matched) or the official PDF docs in your USPS dev account.
       rateIndicator: 'SP',
       weightUOM: 'lb',
       weight: weightLb,
       dimensionsUOM: 'in',
-      // Priority Mail Flat Rate Small Box: 8-11/16" x 5-7/16" x 1-3/4"
-      length: 8.6875,
-      width: 5.4375,
-      height: 1.75,
+      // Priority Mail Small Flat Rate Box — confirmed inside dimensions from
+      // USPS's own price list and the user's live checkout screen.
+      length: 8.625,
+      width: 5.375,
+      height: 1.625,
       processingCategory: 'MACHINABLE',
       mailingDate: mailingDate || new Date().toISOString().split('T')[0],
       destinationEntryFacilityType: 'NONE',
