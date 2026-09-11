@@ -38,21 +38,9 @@ function App() {
 
   // USPS shipping label (Invoice mode only)
   const [printShippingLabel, setPrintShippingLabel] = useState('no');
-  const [signatureOption, setSignatureOption] = useState('without'); // 'with' | 'without'
-  const [mailingDate, setMailingDate] = useState('');
   const [labelGenerating, setLabelGenerating] = useState(false);
   const [labelError, setLabelError] = useState('');
   const [labelResult, setLabelResult] = useState(null); // { trackingNumber, postage, labelPdfBase64 }
-  const [labelConfirmModalOpen, setLabelConfirmModalOpen] = useState(false);
-
-  // Default mailing date = the day after the invoice is issued, editable by the user.
-  useEffect(() => {
-    if (isInvoice && checkDate && !mailingDate) {
-      const next = new Date(checkDate);
-      next.setDate(next.getDate() + 1);
-      setMailingDate(next.toISOString().split('T')[0]);
-    }
-  }, [isInvoice, checkDate]);
 
   const addItem = () => {
     setItems((prev) => (prev.length >= 10 ? prev : [...prev, { id: Date.now(), description: '', weight: '' }]));
@@ -314,14 +302,11 @@ function App() {
             ZIPCode: clientZip,
           },
           weightLb,
-          signatureRequired: signatureOption === 'with',
-          mailingDate,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setLabelResult(data);
-        setLabelConfirmModalOpen(true);
       } else {
         setLabelError(data.error || 'Could not generate the shipping label.');
       }
@@ -909,32 +894,10 @@ function App() {
 
                       {printShippingLabel === 'yes' && (
                         <div style={{ marginTop: '12px' }}>
-                          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                            SIGNATURE
-                          </label>
-                          <select
-                            value={signatureOption}
-                            onChange={(e) => setSignatureOption(e.target.value)}
-                            style={{ width: '100%', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none', marginBottom: '10px' }}
-                          >
-                            <option value="without">Without Signature</option>
-                            <option value="with">With Signature</option>
-                          </select>
-
-                          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                            SHIPPING DATE
-                          </label>
-                          <input
-                            type="date"
-                            value={mailingDate}
-                            onChange={(e) => setMailingDate(e.target.value)}
-                            style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none', marginBottom: '10px' }}
-                          />
-
                           <button
                             type="button"
                             onClick={requestShippingLabel}
-                            disabled={labelGenerating || !mailingDate}
+                            disabled={labelGenerating}
                             style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#d4af37', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: labelGenerating ? 'default' : 'pointer' }}
                           >
                             {labelGenerating ? 'Generating label...' : '🖨️ Generate Shipping Label'}
@@ -942,6 +905,24 @@ function App() {
 
                           {labelError && (
                             <p style={{ color: '#ff4a77', fontSize: '11px', marginTop: '8px' }}>{labelError}</p>
+                          )}
+
+                          {labelResult && (
+                            <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(56,239,125,0.05)', borderRadius: '8px', border: '1px solid rgba(56,239,125,0.2)' }}>
+                              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 4px 0' }}>
+                                Tracking: <span style={{ color: '#fff' }}>{labelResult.trackingNumber}</span>
+                              </p>
+                              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0' }}>
+                                Postage: <span style={{ color: '#38ef7d' }}>${labelResult.postage}</span>
+                              </p>
+                              <button
+                                type="button"
+                                onClick={downloadShippingLabel}
+                                style={{ width: '100%', padding: '10px', background: '#111622', border: '1px solid #38ef7d', color: '#38ef7d', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                              >
+                                📥 DOWNLOAD SHIPPING LABEL
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
@@ -1074,66 +1055,6 @@ function App() {
                 style={{ flex: 1, padding: '10px', background: '#d4af37', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
               >
                 {verifyingCode ? 'Verifying...' : 'Verify'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {labelConfirmModalOpen && labelResult && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              background: '#111622',
-              padding: '30px',
-              borderRadius: '12px',
-              maxWidth: '340px',
-              width: '100%',
-              border: '1px solid rgba(56, 239, 125, 0.3)',
-              fontFamily: 'sans-serif',
-              textAlign: 'left',
-            }}
-          >
-            <h3 style={{ color: '#38ef7d', margin: '0 0 14px 0', fontSize: '16px' }}>Shipping Label Ready</h3>
-            <div style={{ background: '#090d16', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
-                Tracking: <span style={{ color: '#fff' }}>{labelResult.trackingNumber}</span>
-              </p>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
-                Postage: <span style={{ color: '#38ef7d' }}>${labelResult.postage}</span>
-              </p>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 6px 0' }}>
-                Signature: <span style={{ color: '#fff' }}>{signatureOption === 'with' ? 'Required' : 'Not required'}</span>
-              </p>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                Ship Date: <span style={{ color: '#fff' }}>{mailingDate}</span>
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setLabelConfirmModalOpen(false)}
-                style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => { downloadShippingLabel(); setLabelConfirmModalOpen(false); }}
-                style={{ flex: 1, padding: '10px', background: '#38ef7d', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
-              >
-                Confirm & Print
               </button>
             </div>
           </div>

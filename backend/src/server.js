@@ -458,48 +458,11 @@ function parseMultipartLabelResponse(contentType, rawBody) {
 }
 
 app.post('/api/create-shipping-label', async (req, res) => {
-  const { toAddress, weightLb, signatureRequired, mailingDate } = req.body;
+  const { toAddress, weightLb } = req.body;
 
   try {
     const accessToken = await getUspsAccessToken();
     const paymentToken = await getUspsPaymentToken();
-
-    const packageDescription = {
-      mailClass: 'PRIORITY_MAIL',
-      // NOTE: "SP" is confirmed working (it's what produced the successful $9.32
-      // by-weight label). It is NOT a flat-rate indicator — USPS bills this as
-      // regular by-weight Priority Mail. The dimensions below match a real
-      // Priority Mail Flat Rate Small Box, but matching a box's physical size
-      // does not by itself switch USPS to flat-rate pricing; that requires a
-      // specific rateIndicator value we could not confirm from public docs.
-      // Verify the correct value via POST /prices/v3/base-rates/search (it
-      // returns a human-readable "description" field) before relying on this
-      // for actual flat-rate billing.
-      rateIndicator: 'SP',
-      weightUOM: 'lb',
-      weight: weightLb,
-      dimensionsUOM: 'in',
-      // Priority Mail Flat Rate Small Box: 8-11/16" x 5-7/16" x 1-3/4"
-      length: 8.6875,
-      width: 5.4375,
-      height: 1.75,
-      processingCategory: 'MACHINABLE',
-      mailingDate: mailingDate || new Date().toISOString().split('T')[0],
-      destinationEntryFacilityType: 'NONE',
-    };
-
-    if (signatureRequired) {
-      // NOTE: this numeric code is UNCONFIRMED for the domestic Labels API —
-      // set USPS_SIGNATURE_EXTRA_SERVICE_CODE once you've verified the real
-      // value (see the base-rates search endpoint mentioned above). Without
-      // it set, signatureRequired is accepted but has no effect yet.
-      const signatureCode = process.env.USPS_SIGNATURE_EXTRA_SERVICE_CODE;
-      if (signatureCode) {
-        packageDescription.extraServices = [Number(signatureCode)];
-      } else {
-        console.warn('signatureRequired was requested but USPS_SIGNATURE_EXTRA_SERVICE_CODE is not set — sending label without it.');
-      }
-    }
 
     const labelRequestBody = {
       imageInfo: {
@@ -527,7 +490,19 @@ app.post('/api/create-shipping-label', async (req, res) => {
         state: 'TX',
         ZIPCode: '76244',
       },
-      packageDescription,
+      packageDescription: {
+        mailClass: 'PRIORITY_MAIL',
+        rateIndicator: 'SP',
+        weightUOM: 'lb',
+        weight: weightLb,
+        dimensionsUOM: 'in',
+        length: 9,
+        width: 6,
+        height: 3,
+        processingCategory: 'MACHINABLE',
+        mailingDate: new Date().toISOString().split('T')[0],
+        destinationEntryFacilityType: 'NONE',
+      },
     };
 
     const response = await axios.post('https://apis.usps.com/labels/v3/label', labelRequestBody, {
