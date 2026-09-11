@@ -486,13 +486,23 @@ app.post('/api/create-shipping-label', async (req, res) => {
     // Both signature and insurance ride in the same extraServices array —
     // collect them together rather than overwriting one with the other.
     const extraServiceCodes = [];
+    const hasHighValueInsurance = packageValue && Number(packageValue) > 500;
 
-    if (signatureRequired) {
+    // USPS rejects [921, 931] as an invalid combination together — Insurance
+    // > $500 (931) already carries its own mandatory signature requirement,
+    // per the spec's own note that physicalSignatureRequired applies to code
+    // 931 too. Adding standalone Signature Confirmation (921) on top is
+    // redundant and gets rejected, so only add 921 when insurance isn't
+    // already forcing a signature on its own.
+    if (signatureRequired && !hasHighValueInsurance) {
       // Confirmed from the official spec: 921 = Signature Confirmation.
       extraServiceCodes.push(921);
-      // Required whenever a signature extraServices code (921 among others)
-      // is requested. true = physical signature; false allows USPS eSOL
-      // (electronic signature) instead.
+    }
+
+    if (signatureRequired || hasHighValueInsurance) {
+      // Required whenever a signature-carrying extraServices code (921 or
+      // 931) is requested. true = physical signature; false allows USPS
+      // eSOL (electronic signature) instead.
       packageDescription.physicalSignatureRequired = true;
     }
 
@@ -557,10 +567,16 @@ app.post('/api/create-shipping-label', async (req, res) => {
       throw new Error('USPS response did not include a label image.');
     }
 
+    // Full dump so we can see USPS's actual field names — "postage" may only
+    // be the base rate, with extra-service fees living in a separate field
+    // (e.g. "fees", "extraServices", "totalPrice") that we haven't found yet.
+    console.log('USPS labelMetadata (full):', JSON.stringify(labelMetadata));
+
     res.json({
       success: true,
       trackingNumber: labelMetadata?.trackingNumber,
       postage: labelMetadata?.postage,
+      rawMetadata: labelMetadata, // temporary — for debugging the flat-price issue
       labelPdfBase64: labelImageBase64,
     });
   } catch (error) {
