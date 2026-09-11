@@ -17,7 +17,7 @@ const troyOunceToGram = 31.1035;
 const USE_LIVE_SOURCES = false; // Set to true in production
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
-const HARD_FALLBACK = { xau: 4428.72, xag: 66.40 };
+const HARD_FALLBACK = { xau: 4350.55, xag: 64.63 };
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
