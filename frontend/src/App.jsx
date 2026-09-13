@@ -342,7 +342,7 @@ function App() {
     link.click();
   };
 
-  const generatePDFReceipt = () => {
+  const generatePDFReceipt = async () => {
     if (calculatedValue === null) return;
 
     const doc = new jsPDF();
@@ -526,17 +526,24 @@ function App() {
       const filePrefix = isInvoice ? 'Invoice' : 'Quote';
       downloadFilename = `Queen_Jewelry_${filePrefix}_${safeClientNameForFile}.pdf`;
     }
-    doc.save(downloadFilename);
 
     const pdfDataUri = doc.output('datauristring');
     const pdfBase64 = pdfDataUri.split(',')[1];
 
-    sendQuoteNotification({
+    // Send the notification email (with the PDF attached) BEFORE triggering
+    // the local save. On mobile browsers — especially iOS Safari — doc.save()
+    // often can't do a true "download" and instead opens the PDF in a new
+    // tab/native viewer, which can background or throttle this page's JS and
+    // silently kill a fetch() call that hasn't finished yet if it runs after.
+    // Awaiting it first means the request is already away safely either way.
+    await sendQuoteNotification({
       baseValue: grossValue,
       feeAmount,
       totalGross: calculatedValue,
       pdfBase64,
     });
+
+    doc.save(downloadFilename);
   };
 
   return (
