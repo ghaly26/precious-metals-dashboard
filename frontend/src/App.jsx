@@ -520,7 +520,13 @@ function App() {
       doc.addImage(STAMP_IMAGE_BASE64, 'PNG', stampX, stampY, stampWidth, stampHeight);
     }
 
-    doc.save(`Queen_Jewelry_Quote_${Date.now()}.pdf`);
+    let downloadFilename = `Queen_Jewelry_Quote_${Date.now()}.pdf`;
+    if (customClientName.trim()) {
+      const safeClientNameForFile = customClientName.trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Client';
+      const filePrefix = isInvoice ? 'Invoice' : 'Quote';
+      downloadFilename = `Queen_Jewelry_${filePrefix}_${safeClientNameForFile}.pdf`;
+    }
+    doc.save(downloadFilename);
 
     const pdfDataUri = doc.output('datauristring');
     const pdfBase64 = pdfDataUri.split(',')[1];

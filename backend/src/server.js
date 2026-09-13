@@ -297,9 +297,13 @@ app.post('/api/send-quote', async (req, res) => {
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
-      const attachments = pdfBase64
-        ? [{ filename: `Queen_Jewelry_Quote_${Date.now()}.pdf`, content: pdfBase64 }]
-        : undefined;
+      let attachmentFilename = `Queen_Jewelry_Quote_${Date.now()}.pdf`;
+      if (clientName && clientName.trim()) {
+        const safeClientName = clientName.trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Client';
+        const prefix = documentType === 'invoice' ? 'Invoice' : 'Quote';
+        attachmentFilename = `Queen_Jewelry_${prefix}_${safeClientName}.pdf`;
+      }
+      const attachments = pdfBase64 ? [{ filename: attachmentFilename, content: pdfBase64 }] : undefined;
       await sendResendEmail({ subject: emailSubject, html: emailHtmlContent, attachments });
       console.log("📨 Quote notification email sent successfully to info@queenjewelryllc.com");
     } else {
