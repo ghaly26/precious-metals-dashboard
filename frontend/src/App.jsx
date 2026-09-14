@@ -113,6 +113,45 @@ function App() {
     setVerificationVerified(false);
   }, [documentType, customClientName, phoneNumber, clientStreetAddress, clientCity, clientState, clientZip]);
 
+  // UI click/tap sound feedback. Synthesized with Web Audio (no audio file
+  // needed) and wired via document-level event delegation so every existing
+  // button and input/select in the app gets it without editing each one.
+  useEffect(() => {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return undefined;
+    const audioCtx = new AudioCtx();
+
+    const playClick = () => {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 900;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.07);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.07);
+    };
+
+    const handleClick = (e) => {
+      if (e.target.tagName === 'BUTTON') playClick();
+    };
+    const handleChange = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') playClick();
+    };
+
+    document.addEventListener('click', handleClick, true);
+    document.addEventListener('change', handleChange, true);
+
+    return () => {
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('change', handleChange, true);
+      audioCtx.close();
+    };
+  }, []);
+
   const sendVerificationCode = async () => {
     setVerificationError('');
     setVerificationSending(true);
