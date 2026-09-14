@@ -246,32 +246,31 @@ function App() {
       return;
     }
 
-    // 🛠️ REPLACE IT WITH THIS SMART VALIDATION BYPASS:
-  //   if (!metals) {
-  //     setCalculatedValue(null);
-  //     return;
-  //  }
-    // Check if the global default custom rate is invalid
-    // const baseCustomRateInvalid = 
-    //   isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
+    
+    // 1. Verify if the global base custom rate input field is blank or zero
+    const baseCustomRateInvalid =
+      isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
 
-    // Only block execution if a user leaves global custom rate empty AND doesn't provide item overrides
-      // if (baseCustomRateInvalid) {
-      //  const hasRowOverrides = items.some(it => it.price !== '' && Number(it.price) > 0);
-      //    if (!hasRowOverrides) {
-      //     setCalculatedValue(null);
-      //     setGrossValue(null);
-      //     setFeeAmount(null);
-      //     return;
-      //   }
-      // }
+    // 2. ONLY reject custom operations if BOTH the global box AND itemized rows lack valid numbers
+    if (baseCustomRateInvalid) {
+      const hasRowOverrides = items.some(it => it.price !== '' && Number(it.price) > 0);
+      if (!hasRowOverrides) {
+        setCalculatedValue(null);
+        setGrossValue(null);
+        setFeeAmount(null);
+        return;
+      }
+    }
 
     const ratePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
     const customFeeApplies = isInvoice && isCustomMetal && chargeFeePerGram === 'yes';
 
-    let totalWeight;
-    let baseGoldPrice;
+    let totalWeight = 0;
+    let baseGoldPrice = 0;
+
+    // let totalWeight;
+    // let baseGoldPrice;
 
     if (useItemizedEntry) {
       const validItems = items.filter(
@@ -291,10 +290,14 @@ function App() {
         const hasManualPrice = it.price !== '' && !Number.isNaN(Number(it.price)) && Number(it.price) > 0;
         if (!hasManualPrice) {
           return sum + Number(it.weight) * ratePerGram;
-        }
-        return sum + (isCustomMetal ? Number(it.weight) * Number(it.price) : Number(it.price));
-      }, 0);
-    } else {
+        
+        //return sum + (isCustomMetal ? Number(it.weight) * Number(it.price) : Number(it.price));
+        } else {
+          // Treat manual override values universally as an active PER-GRAM calculation rate
+          return sum + (Number(it.weight) * Number(it.price));
+        }  
+       }, 0);
+     } else {
       if (!weight || Number.isNaN(Number(weight)) || Number(weight) <= 0) {
         setCalculatedValue(null);
         setGrossValue(null);
