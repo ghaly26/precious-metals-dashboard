@@ -239,12 +239,34 @@ function App() {
     const invalidCustomRate =
       isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
 
-    if (!metals || invalidCustomRate) {
+    // if (!metals || invalidCustomRate) {
+    //   setCalculatedValue(null);
+    //   setGrossValue(null);
+    //   setFeeAmount(null);
+    //   return;
+    // }
+
+    // 🛠️ REPLACE IT WITH THIS SMART VALIDATION BYPASS:
+    if (!metals) {
       setCalculatedValue(null);
-      setGrossValue(null);
-      setFeeAmount(null);
       return;
-    }
+   }
+   // Check if the global default custom rate is invalid
+   const baseCustomRateInvalid = 
+     isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
+
+   // Only block execution if a user leaves global custom rate empty AND doesn't provide item overrides
+     if (baseCustomRateInvalid) {
+       const hasRowOverrides = items.some(it => it.price !== '' && Number(it.price) > 0);
+        if (!hasRowOverrides) {
+          setCalculatedValue(null);
+          setGrossValue(null);
+          setFeeAmount(null);
+          return;
+        }
+
+
+
 
     const ratePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
@@ -667,7 +689,7 @@ function App() {
                           value={item.description}
                           onChange={(e) => updateItem(item.id, 'description', e.target.value)}
                           placeholder={`Item ${idx + 1} description`}
-                          style={{ flex: 2, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                          style={{ flex: '2 1 180px', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
                         />
                         <input
                           type="number"
@@ -675,7 +697,7 @@ function App() {
                           value={item.weight}
                           onChange={(e) => updateItem(item.id, 'weight', e.target.value)}
                           placeholder="Weight (g)"
-                          style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                          style={{ flex: '1 1 80px', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
                         />
                         <input
                           type="number"
@@ -683,7 +705,7 @@ function App() {
                           value={item.price}
                           onChange={(e) => updateItem(item.id, 'price', e.target.value)}
                           placeholder={isCustomMetal ? 'Price/Gram (optional)' : 'Price $ (optional)'}
-                          style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '13px', outline: 'none' }}
+                          style={{ flex: '1 1 90px', boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '13px', outline: 'none' }}
                         />
                         {items.length > 1 && (
                           <button
