@@ -620,7 +620,7 @@ function App() {
 
         {metals && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '25px', width: '100%' }}>
-            <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '25px', border: '1px solid rgba(212, 175, 55, 0.25)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)' }}>
+            <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '25px', border: '1px solid rgba(212, 175, 55, 0.25)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', }}>
               <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#d4af37', fontWeight: '400', letterSpacing: '1px', textTransform: 'uppercase' }}>Melt Value & Fee Calculator</h3>
 
               <form onSubmit={handleCalculate} style={{ display: 'flex', flexDirection: 'column', gap: '14px', textAlign: 'left', fontFamily: 'sans-serif' }}>
@@ -661,7 +661,7 @@ function App() {
                       ITEMS (DESCRIPTION + WEIGHT + PRICE)
                     </label>
                     {items.map((item, idx) => (
-                      <div key={item.id} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                      <div key={item.id} style={{ display: 'flex',flexWrap: 'wrap', gap: '8px', marginBottom: '12px', alignItems: 'center', width: '100%' }}>
                         <input
                           type="text"
                           value={item.description}
