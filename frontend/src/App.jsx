@@ -251,23 +251,21 @@ function App() {
       setCalculatedValue(null);
       return;
    }
-   // Check if the global default custom rate is invalid
-   const baseCustomRateInvalid = 
-     isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
+    // Check if the global default custom rate is invalid
+    const baseCustomRateInvalid = 
+      isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
 
-   // Only block execution if a user leaves global custom rate empty AND doesn't provide item overrides
-     if (baseCustomRateInvalid) {
+    // Only block execution if a user leaves global custom rate empty AND doesn't provide item overrides
+      if (baseCustomRateInvalid) {
        const hasRowOverrides = items.some(it => it.price !== '' && Number(it.price) > 0);
-        if (!hasRowOverrides) {
+         if (!hasRowOverrides) {
           setCalculatedValue(null);
           setGrossValue(null);
           setFeeAmount(null);
           return;
         }
-
-
-
-
+      }
+      
     const ratePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
     const fee = customFee !== '' && !Number.isNaN(Number(customFee)) ? Number(customFee) : 0;
     const customFeeApplies = isInvoice && isCustomMetal && chargeFeePerGram === 'yes';
