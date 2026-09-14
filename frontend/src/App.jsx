@@ -264,11 +264,15 @@ function App() {
         return;
       }
       totalWeight = validItems.reduce((sum, it) => sum + Number(it.weight), 0);
-      // Per-item price override: if the user typed a price for an item, use
-      // it directly instead of computing weight × rate for that one item.
+      // Per-item price override. For Custom items, price is a PER-GRAM rate
+      // override (that item's own rate instead of the default customRatePerGram).
+      // For standard karats, price is a flat TOTAL override for that item.
       baseGoldPrice = validItems.reduce((sum, it) => {
         const hasManualPrice = it.price !== '' && !Number.isNaN(Number(it.price)) && Number(it.price) > 0;
-        return sum + (hasManualPrice ? Number(it.price) : Number(it.weight) * ratePerGram);
+        if (!hasManualPrice) {
+          return sum + Number(it.weight) * ratePerGram;
+        }
+        return sum + (isCustomMetal ? Number(it.weight) * Number(it.price) : Number(it.price));
       }, 0);
     } else {
       if (!weight || Number.isNaN(Number(weight)) || Number(weight) <= 0) {
@@ -440,8 +444,8 @@ function App() {
     const pdfRatePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
 
     // Itemized entry (now universal) draws one row per item, each priced
-    // individually — using a manual per-item price when the user entered
-    // one, otherwise falling back to weight × rate as before.
+    // individually. For Custom items, a per-item price is a PER-GRAM rate
+    // override; for standard karats, it's a flat TOTAL override.
     const rows = useItemizedEntry
       ? items
           .filter((it) => it.weight !== '' && !Number.isNaN(Number(it.weight)) && Number(it.weight) > 0)
@@ -462,8 +466,18 @@ function App() {
     rows.forEach((row) => {
       const wrappedLines = doc.splitTextToSize(row.description, descriptionColWidth);
       const rowHeight = Math.max(12, wrappedLines.length * 5 + 4);
-      const rowBaseValue = row.manualPrice !== null ? row.manualPrice : row.weight * pdfRatePerGram;
-      const rateDisplay = row.manualPrice !== null ? 'Manual' : `$${pdfRatePerGram.toFixed(2)} /g`;
+      let rowBaseValue;
+      let rateDisplay;
+      if (row.manualPrice === null) {
+        rowBaseValue = row.weight * pdfRatePerGram;
+        rateDisplay = `$${pdfRatePerGram.toFixed(2)} /g`;
+      } else if (isCustomMetal) {
+        rowBaseValue = row.weight * row.manualPrice;
+        rateDisplay = `$${row.manualPrice.toFixed(2)} /g`;
+      } else {
+        rowBaseValue = row.manualPrice;
+        rateDisplay = 'Manual';
+      }
 
       doc.setFillColor(255, 255, 255);
       doc.rect(15, cursorY, 180, rowHeight, 'F');
@@ -668,7 +682,7 @@ function App() {
                           step="any"
                           value={item.price}
                           onChange={(e) => updateItem(item.id, 'price', e.target.value)}
-                          placeholder="Price $ (optional)"
+                          placeholder={isCustomMetal ? 'Price/Gram (optional)' : 'Price $ (optional)'}
                           style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '13px', outline: 'none' }}
                         />
                         {items.length > 1 && (
@@ -683,7 +697,9 @@ function App() {
                       </div>
                     ))}
                     <p style={{ fontSize: '10px', color: '#64748b', margin: '0 0 10px 0' }}>
-                      Leave Price blank to calculate that item automatically from weight × rate.
+                      {isCustomMetal
+                        ? 'Leave Price/Gram blank to use the default rate below for that item, or set a different per-gram rate just for it.'
+                        : 'Leave Price blank to calculate that item automatically from weight × rate.'}
                     </p>
                     <button
                       type="button"
@@ -712,7 +728,7 @@ function App() {
                   <>
                     <div>
                       <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '1px', fontWeight: '600' }}>
-                        TOTAL PRICE PER GRAM (MANUAL, $)
+                        DEFAULT PRICE PER GRAM (MANUAL, $)
                       </label>
                       <input
                         type="number"
