@@ -258,7 +258,7 @@ app.post('/api/send-quote', async (req, res) => {
     const itemsListHtml = Array.isArray(items) && items.length > 0
       ? `<h3 style="color: #00f2fe; margin-top: 20px;">Items:</h3>
          <ul style="background: #131c2e; padding: 15px; border-radius: 8px; list-style: none;">
-           ${items.map((it) => `<li>${it.description || 'Unnamed item'} — ${it.weight}g</li>`).join('')}
+           ${items.map((it) => `<li>${it.description || 'Unnamed item'} — ${it.weight}g${it.price ? ` — Manual price: $${it.price}` : ''}</li>`).join('')}
          </ul>`
       : '';
 

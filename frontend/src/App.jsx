@@ -16,7 +16,7 @@ function App() {
   const [customFee, setCustomFee] = useState('');
   const [customRatePerGram, setCustomRatePerGram] = useState('');
   const [chargeFeePerGram, setChargeFeePerGram] = useState('yes'); // invoice + custom only
-  const [items, setItems] = useState([{ id: 1, description: '', weight: '' }]);
+  const [items, setItems] = useState([{ id: 1, description: '', weight: '', price: '' }]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [customClientName, setCustomClientName] = useState('');
   const [clientStreetAddress, setClientStreetAddress] = useState('');
@@ -47,7 +47,7 @@ function App() {
   const [labelConfirmModalOpen, setLabelConfirmModalOpen] = useState(false);
 
   const addItem = () => {
-    setItems((prev) => (prev.length >= 10 ? prev : [...prev, { id: Date.now(), description: '', weight: '' }]));
+    setItems((prev) => (prev.length >= 10 ? prev : [...prev, { id: Date.now(), description: '', weight: '', price: '' }]));
   };
 
   const removeItem = (id) => {
@@ -64,7 +64,7 @@ function App() {
     setCustomFee('');
     setCustomRatePerGram('');
     setChargeFeePerGram('yes');
-    setItems([{ id: Date.now(), description: '', weight: '' }]);
+    setItems([{ id: Date.now(), description: '', weight: '', price: '' }]);
     setPhoneNumber('');
     setCustomClientName('');
     setClientStreetAddress('');
@@ -90,7 +90,7 @@ function App() {
   const isCustomMetal = selectedMetal === 'custom';
   // Custom items and any invoice always use the itemized entry list; a plain
   // Quote for a standard karat keeps the original single-weight field.
-  const useItemizedEntry = isCustomMetal || isInvoice;
+  const useItemizedEntry = true;
   const noFeeMode = isInvoice && isCustomMetal && chargeFeePerGram === 'no';
   const clientAddressCombined = `${clientStreetAddress}, ${clientCity}, ${clientState} ${clientZip}`.trim();
 
@@ -199,7 +199,7 @@ function App() {
       const itemsSummary = useItemizedEntry
         ? items
             .filter((it) => it.weight !== '' && Number(it.weight) > 0)
-            .map((it) => ({ description: it.description.trim() || null, weight: it.weight }))
+            .map((it) => ({ description: it.description.trim() || null, weight: it.weight, price: it.price || null }))
         : undefined;
 
       await fetch(`${BACKEND_URL}/api/send-quote`, {
@@ -251,6 +251,7 @@ function App() {
     const customFeeApplies = isInvoice && isCustomMetal && chargeFeePerGram === 'yes';
 
     let totalWeight;
+    let baseGoldPrice;
 
     if (useItemizedEntry) {
       const validItems = items.filter(
@@ -263,6 +264,12 @@ function App() {
         return;
       }
       totalWeight = validItems.reduce((sum, it) => sum + Number(it.weight), 0);
+      // Per-item price override: if the user typed a price for an item, use
+      // it directly instead of computing weight × rate for that one item.
+      baseGoldPrice = validItems.reduce((sum, it) => {
+        const hasManualPrice = it.price !== '' && !Number.isNaN(Number(it.price)) && Number(it.price) > 0;
+        return sum + (hasManualPrice ? Number(it.price) : Number(it.weight) * ratePerGram);
+      }, 0);
     } else {
       if (!weight || Number.isNaN(Number(weight)) || Number(weight) <= 0) {
         setCalculatedValue(null);
@@ -271,9 +278,9 @@ function App() {
         return;
       }
       totalWeight = Number(weight);
+      baseGoldPrice = totalWeight * ratePerGram;
     }
 
-    const baseGoldPrice = totalWeight * ratePerGram;
     const totalfeeamount = selectedMetal === 'custom'
       ? (customFeeApplies ? fee * totalWeight : 0)
       : selectedMetal === 'bullion24kGram' ? fee : fee * totalWeight;
@@ -432,17 +439,21 @@ function App() {
 
     const pdfRatePerGram = getRatePerGram(selectedMetal, metals, customRatePerGram);
 
-    // Itemized entry (Custom, or any Invoice) draws one row per item, each
-    // priced individually. A plain Quote for a standard karat draws the
-    // original single row driven by the simple weight field.
+    // Itemized entry (now universal) draws one row per item, each priced
+    // individually — using a manual per-item price when the user entered
+    // one, otherwise falling back to weight × rate as before.
     const rows = useItemizedEntry
       ? items
           .filter((it) => it.weight !== '' && !Number.isNaN(Number(it.weight)) && Number(it.weight) > 0)
-          .map((it) => ({
-            description: it.description.trim() || metalLabels[selectedMetal],
-            weight: Number(it.weight),
-          }))
-      : [{ description: metalLabels[selectedMetal], weight: Number(weight) }];
+          .map((it) => {
+            const hasManualPrice = it.price !== '' && !Number.isNaN(Number(it.price)) && Number(it.price) > 0;
+            return {
+              description: it.description.trim() || metalLabels[selectedMetal],
+              weight: Number(it.weight),
+              manualPrice: hasManualPrice ? Number(it.price) : null,
+            };
+          })
+      : [{ description: metalLabels[selectedMetal], weight: Number(weight), manualPrice: null }];
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
@@ -451,7 +462,8 @@ function App() {
     rows.forEach((row) => {
       const wrappedLines = doc.splitTextToSize(row.description, descriptionColWidth);
       const rowHeight = Math.max(12, wrappedLines.length * 5 + 4);
-      const rowBaseValue = row.weight * pdfRatePerGram;
+      const rowBaseValue = row.manualPrice !== null ? row.manualPrice : row.weight * pdfRatePerGram;
+      const rateDisplay = row.manualPrice !== null ? 'Manual' : `$${pdfRatePerGram.toFixed(2)} /g`;
 
       doc.setFillColor(255, 255, 255);
       doc.rect(15, cursorY, 180, rowHeight, 'F');
@@ -460,7 +472,7 @@ function App() {
         doc.text(line, 20, cursorY + 7 + idx * 5);
       });
       doc.text(`${row.weight.toFixed(2)} g`, 90, cursorY + 7);
-      doc.text(`$${pdfRatePerGram.toFixed(2)} /g`, 125, cursorY + 7);
+      doc.text(rateDisplay, 125, cursorY + 7);
       doc.text(`$${rowBaseValue.toFixed(2)}`, 160, cursorY + 7);
 
       cursorY += rowHeight;
@@ -632,7 +644,7 @@ function App() {
                 {useItemizedEntry ? (
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '8px', letterSpacing: '1px', fontWeight: '600' }}>
-                      ITEMS (DESCRIPTION + WEIGHT)
+                      ITEMS (DESCRIPTION + WEIGHT + PRICE)
                     </label>
                     {items.map((item, idx) => (
                       <div key={item.id} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
@@ -651,6 +663,14 @@ function App() {
                           placeholder="Weight (g)"
                           style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '13px', outline: 'none' }}
                         />
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.price}
+                          onChange={(e) => updateItem(item.id, 'price', e.target.value)}
+                          placeholder="Price $ (optional)"
+                          style={{ flex: 1, boxSizing: 'border-box', padding: '10px', background: '#090d16', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: '8px', color: '#d4af37', fontSize: '13px', outline: 'none' }}
+                        />
                         {items.length > 1 && (
                           <button
                             type="button"
@@ -662,6 +682,9 @@ function App() {
                         )}
                       </div>
                     ))}
+                    <p style={{ fontSize: '10px', color: '#64748b', margin: '0 0 10px 0' }}>
+                      Leave Price blank to calculate that item automatically from weight × rate.
+                    </p>
                     <button
                       type="button"
                       onClick={addItem}
