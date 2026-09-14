@@ -236,24 +236,21 @@ function App() {
       return;
     }
 
-    const invalidCustomRate =
-      isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
-
-    if (!metals || invalidCustomRate) {
+    if (!metals) {
       setCalculatedValue(null);
       setGrossValue(null);
       setFeeAmount(null);
       return;
     }
 
-    
-    // 1. Verify if the global base custom rate input field is blank or zero
+    // Only require the Default Price Per Gram to be filled when at least one
+    // item is relying on it — if every item has its own manual price override,
+    // the default is irrelevant and shouldn't block calculation.
     const baseCustomRateInvalid =
       isCustomMetal && (customRatePerGram === '' || Number.isNaN(Number(customRatePerGram)) || Number(customRatePerGram) <= 0);
 
-    // 2. ONLY reject custom operations if BOTH the global box AND itemized rows lack valid numbers
     if (baseCustomRateInvalid) {
-      const hasRowOverrides = items.some(it => it.price !== '' && Number(it.price) > 0);
+      const hasRowOverrides = items.some((it) => it.price !== '' && Number(it.price) > 0);
       if (!hasRowOverrides) {
         setCalculatedValue(null);
         setGrossValue(null);
@@ -269,9 +266,6 @@ function App() {
     let totalWeight = 0;
     let baseGoldPrice = 0;
 
-    // let totalWeight;
-    // let baseGoldPrice;
-
     if (useItemizedEntry) {
       const validItems = items.filter(
         (it) => it.weight !== '' && !Number.isNaN(Number(it.weight)) && Number(it.weight) > 0
@@ -283,21 +277,15 @@ function App() {
         return;
       }
       totalWeight = validItems.reduce((sum, it) => sum + Number(it.weight), 0);
-      // Per-item price override. For Custom items, price is a PER-GRAM rate
-      // override (that item's own rate instead of the default customRatePerGram).
-      // For standard karats, price is a flat TOTAL override for that item.
+      // Per-item price override is treated universally as a PER-GRAM rate —
+      // for both Custom and standard karat items — multiplied by that item's
+      // weight, exactly like the default rate would be if no override was set.
       baseGoldPrice = validItems.reduce((sum, it) => {
         const hasManualPrice = it.price !== '' && !Number.isNaN(Number(it.price)) && Number(it.price) > 0;
-        if (!hasManualPrice) {
-          return sum + Number(it.weight) * ratePerGram;
-        
-        //return sum + (isCustomMetal ? Number(it.weight) * Number(it.price) : Number(it.price));
-        } else {
-          // Treat manual override values universally as an active PER-GRAM calculation rate
-          return sum + (Number(it.weight) * Number(it.price));
-        }  
-       }, 0);
-     } else {
+        const effectiveRate = hasManualPrice ? Number(it.price) : ratePerGram;
+        return sum + Number(it.weight) * effectiveRate;
+      }, 0);
+    } else {
       if (!weight || Number.isNaN(Number(weight)) || Number(weight) <= 0) {
         setCalculatedValue(null);
         setGrossValue(null);
@@ -494,12 +482,9 @@ function App() {
       if (row.manualPrice === null) {
         rowBaseValue = row.weight * pdfRatePerGram;
         rateDisplay = `$${pdfRatePerGram.toFixed(2)} /g`;
-      } else if (isCustomMetal) {
+      } else {
         rowBaseValue = row.weight * row.manualPrice;
         rateDisplay = `$${row.manualPrice.toFixed(2)} /g`;
-      } else {
-        rowBaseValue = row.manualPrice;
-        rateDisplay = 'Manual';
       }
 
       doc.setFillColor(255, 255, 255);
