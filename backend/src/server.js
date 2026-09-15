@@ -634,5 +634,48 @@ app.post('/api/create-shipping-label', async (req, res) => {
   }
 });
 
+// 🟢 Smart Address Validation Endpoint
+app.post('/api/validate-address', async (req, res) => {
+  const { streetAddress, city, state, ZIPCode } = req.body;
+  try {
+    const accessToken = await getUspsAccessToken();
+    const response = await axios.post('https://usps.com', {
+      streetAddress,
+      city,
+      state,
+      ZIPCode
+    }, {
+      headers: { 
+        'Authorization': `Bearer ${accessToken}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+
+    const validated = response.data?.address;
+    if (!validated) {
+      return res.json({ valid: false });
+    }
+
+    // Check if the input perfectly matches official database standards
+    const matches = 
+      validated.streetAddress.toLowerCase() === streetAddress.toLowerCase() &&
+      validated.ZIPCode.substring(0, 5) === ZIPCode.substring(0, 5);
+
+    res.json({
+      valid: true,
+      matches,
+      suggested: {
+        streetAddress: validated.streetAddress,
+        city: validated.city,
+        state: validated.state,
+        ZIPCode: validated.ZIPCode
+      }
+    });
+  } catch (err) {
+    console.error('USPS Address validation error:', err.message);
+    res.json({ valid: false });
+  }
+});
+
 const port = process.env.PORT || 5000;
 app.listen(port, () => console.log(`🚀 Queen Jewelry Live Metals Server running on port ${port}`));

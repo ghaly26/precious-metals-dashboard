@@ -28,6 +28,10 @@ function App() {
   const [feeAmount, setFeeAmount] = useState(null);
   const [checkDate, setCheckDate] = useState('');
 
+   // Address Verification & Correction Modal states
+  const [addressSuggestion, setAddressSuggestion] = useState(null);
+  const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
+
   // Invoice-only verification gate
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [verificationSending, setVerificationSending] = useState(false);
@@ -152,22 +156,87 @@ function App() {
     };
   }, []);
 
+  // const sendVerificationCode = async () => {
+  //   setVerificationError('');
+  //   setVerificationSending(true);
+  //   try {
+  //     const res = await fetch(`${BACKEND_URL}/api/send-verification-code`, { method: 'POST' });
+  //     const data = await res.json();
+  //     if (data.success) {
+  //       setVerificationModalOpen(true);
+  //     } else {
+  //       setVerificationError('Could not send verification code. Please try again.');
+  //     }
+  //   } catch (err) {
+  //     setVerificationError('Could not send verification code. Please try again.');
+  //   } finally {
+  //     setVerificationSending(false);
+  //   }
+  // };
+
+  const executeSendCodeRequest = async () => {
+    const res = await fetch(`${BACKEND_URL}/api/send-verification-code`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      setVerificationModalOpen(true);
+    } else {
+      setVerificationError('Could not send verification code. Please try again.');
+    }
+    setVerificationSending(false);
+  };
+
   const sendVerificationCode = async () => {
     setVerificationError('');
     setVerificationSending(true);
+
     try {
-      const res = await fetch(`${BACKEND_URL}/api/send-verification-code`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setVerificationModalOpen(true);
-      } else {
-        setVerificationError('Could not send verification code. Please try again.');
+      // Step A: Run structural lookup against USPS Address Database
+      const addrRes = await fetch(`${BACKEND_URL}/api/validate-address`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streetAddress: clientStreetAddress,
+          city: clientCity,
+          state: clientState,
+          ZIPCode: clientZip
+        })
+      });
+      const addrData = await addrRes.json();
+
+      if (!addrData.valid) {
+        setVerificationError('❌ Invalid Address: This house or location details cannot be found.');
+        setVerificationSending(false);
+        return;
       }
+
+      // Step B: Intercept layout flow if typos are caught to trigger correction modal
+      if (!addrData.matches) {
+        setAddressSuggestion(addrData.suggested);
+        setSuggestionModalOpen(true);
+        setVerificationSending(false);
+        return;
+      }
+
+      // Step C: If perfect match, fire verification e-mail immediately
+      await executeSendCodeRequest();
     } catch (err) {
-      setVerificationError('Could not send verification code. Please try again.');
-    } finally {
+      setVerificationError('Could not reach validation service. Please try again.');
       setVerificationSending(false);
     }
+  };
+
+  const acceptSuggestion = (suggested) => {
+    setClientStreetAddress(suggested.streetAddress);
+    setClientCity(suggested.city);
+    setClientState(suggested.state);
+    setClientZip(suggested.ZIPCode);
+    setSuggestionModalOpen(false);
+    
+    // Slight pause to ensure react inputs sync up before firing email transmission
+    setTimeout(() => {
+      setVerificationSending(true);
+      executeSendCodeRequest();
+    }, 150);
   };
 
   const submitVerificationCode = async () => {
@@ -1137,6 +1206,63 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* 📍 ADDRESS STANDARDIZATION & CORRECTION MODAL */}
+      {suggestionModalOpen && addressSuggestion && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#111622',
+              padding: '30px',
+              borderRadius: '12px',
+              maxWidth: '360px',
+              width: '100%',
+              border: '1px solid #f5a623',
+              fontFamily: 'sans-serif',
+              textAlign: 'left',
+            }}
+          >
+            <h3 style={{ color: '#f5a623', margin: '0 0 10px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              📍 Suggested Address Format
+            </h3>
+            <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 16px 0', lineHeight: '1.4' }}>
+              The address entered doesn't match official postal standards. Would you like to update to the verified clean recommendation?
+            </p>
+            <div style={{ background: '#090d16', padding: '14px', borderRadius: '8px', fontSize: '13px', color: '#fff', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)', lineHeight: '1.6' }}>
+              <span style={{ color: '#f5a623', fontSize: '11px', fontWeight: 'bold' }}>USPS STANDARDIZED:</span><br/>
+              {addressSuggestion.streetAddress}<br/>
+              {addressSuggestion.city}, {addressSuggestion.state} {addressSuggestion.ZIPCode}
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => { setSuggestionModalOpen(false); executeSendCodeRequest(); }}
+                style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Keep Mine
+              </button>
+              <button
+                type="button"
+                onClick={() => acceptSuggestion(addressSuggestion)}
+                style={{ flex: 1, padding: '10px', background: '#f5a623', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Use Suggestion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {verificationModalOpen && (
         <div
