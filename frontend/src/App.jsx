@@ -36,6 +36,13 @@ function App() {
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
 
+  // Address verification (Invoice mode only)
+  const [addressChecking, setAddressChecking] = useState(false);
+  const [addressCheckError, setAddressCheckError] = useState('');
+  const [addressSuggestion, setAddressSuggestion] = useState(null);
+  const [addressSuggestionModalOpen, setAddressSuggestionModalOpen] = useState(false);
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+
   // USPS shipping label (Invoice mode only)
   const [printShippingLabel, setPrintShippingLabel] = useState('no');
   const [signatureOption, setSignatureOption] = useState('without'); // 'with' | 'without'
@@ -112,6 +119,65 @@ function App() {
   useEffect(() => {
     setVerificationVerified(false);
   }, [documentType, customClientName, phoneNumber, clientStreetAddress, clientCity, clientState, clientZip]);
+
+  // Address confirmation resets if the address is edited after being checked.
+  useEffect(() => {
+    setAddressConfirmed(false);
+    setAddressSuggestion(null);
+    setAddressCheckError('');
+  }, [clientStreetAddress, clientCity, clientState, clientZip]);
+
+  const verifyAddress = async () => {
+    setAddressChecking(true);
+    setAddressCheckError('');
+    setAddressSuggestion(null);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/verify-address`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streetAddress: clientStreetAddress,
+          city: clientCity,
+          state: clientState,
+          ZIPCode: clientZip,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAddressCheckError(data.error || 'Could not verify this address.');
+        return;
+      }
+      if (!data.found) {
+        setAddressCheckError('USPS could not find this address. Please double-check it.');
+        return;
+      }
+      if (data.matchesTyped) {
+        setAddressConfirmed(true);
+      } else {
+        setAddressSuggestion(data.standardized);
+        setAddressSuggestionModalOpen(true);
+      }
+    } catch (err) {
+      setAddressCheckError('Could not reach the address verification service.');
+    } finally {
+      setAddressChecking(false);
+    }
+  };
+
+  const acceptAddressSuggestion = () => {
+    if (!addressSuggestion) return;
+    setClientStreetAddress(addressSuggestion.streetAddress);
+    setClientCity(addressSuggestion.city);
+    setClientState(addressSuggestion.state);
+    setClientZip(addressSuggestion.ZIPCode);
+    setAddressConfirmed(true);
+    setAddressSuggestionModalOpen(false);
+  };
+
+  const keepTypedAddress = () => {
+    setAddressConfirmed(true);
+    setAddressSuggestionModalOpen(false);
+  };
 
   // UI click/tap sound feedback. Synthesized with Web Audio (no audio file
   // needed) and wired via document-level event delegation so every existing
@@ -268,7 +334,7 @@ function App() {
   const handleCalculate = (e) => {
     if (e) e.preventDefault();
 
-    if (isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified)) {
+    if (isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified || !addressConfirmed)) {
       setCalculatedValue(null);
       setGrossValue(null);
       setFeeAmount(null);
@@ -923,6 +989,30 @@ function App() {
                       </div>
                     </div>
 
+                    <div style={{ marginBottom: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={verifyAddress}
+                        disabled={addressChecking || !clientStreetAddress.trim() || !clientCity.trim() || !clientState.trim() || addressConfirmed}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          background: addressConfirmed ? 'rgba(56,239,125,0.15)' : 'transparent',
+                          border: `1px solid ${addressConfirmed ? '#38ef7d' : 'rgba(212,175,55,0.4)'}`,
+                          color: addressConfirmed ? '#38ef7d' : '#d4af37',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: addressConfirmed ? 'default' : 'pointer',
+                        }}
+                      >
+                        {addressConfirmed ? '✅ Address Confirmed' : addressChecking ? 'Checking address...' : 'Check Address'}
+                      </button>
+                      {addressCheckError && (
+                        <p style={{ color: '#ff4a77', fontSize: '11px', marginTop: '6px' }}>{addressCheckError}</p>
+                      )}
+                    </div>
+
                     <div style={{ padding: '14px', background: 'rgba(212, 175, 55, 0.05)', borderRadius: '8px', border: '1px solid rgba(212, 175, 55, 0.15)' }}>
                       <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0' }}>
                         Invoices require a one-time verification code emailed to our store before generating.
@@ -955,11 +1045,11 @@ function App() {
 
                 <button
                   type="submit"
-                  disabled={isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified)}
+                  disabled={isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified || !addressConfirmed)}
                   style={{
                     width: '100%',
                     padding: '14px',
-                    background: isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified)
+                    background: isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified || !addressConfirmed)
                       ? 'rgba(212, 175, 55, 0.25)'
                       : 'linear-gradient(135deg, #d4af37 0%, #aa841c 100%)',
                     border: 'none',
@@ -967,7 +1057,7 @@ function App() {
                     color: '#000000',
                     fontWeight: 'bold',
                     fontSize: '13px',
-                    cursor: isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified) ? 'not-allowed' : 'pointer',
+                    cursor: isInvoice && (!requiredInvoiceFieldsFilled || !verificationVerified || !addressConfirmed) ? 'not-allowed' : 'pointer',
                     letterSpacing: '1px',
                     textTransform: 'uppercase',
                     boxShadow: '0 4px 20px rgba(212, 175, 55, 0.2)',
@@ -1193,6 +1283,70 @@ function App() {
                 style={{ flex: 1, padding: '10px', background: '#d4af37', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
               >
                 {verifyingCode ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addressSuggestionModalOpen && addressSuggestion && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#111622',
+              padding: '30px',
+              borderRadius: '12px',
+              maxWidth: '360px',
+              width: '100%',
+              border: '1px solid rgba(212, 175, 55, 0.3)',
+              fontFamily: 'sans-serif',
+              textAlign: 'left',
+            }}
+          >
+            <h3 style={{ color: '#d4af37', margin: '0 0 10px 0', fontSize: '16px' }}>USPS Suggested a Different Address</h3>
+            <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 14px 0' }}>
+              What you typed doesn't exactly match USPS's records. You can use their standardized version or keep what you entered.
+            </p>
+
+            <div style={{ background: '#090d16', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
+              <p style={{ fontSize: '10px', color: '#64748b', margin: '0 0 4px 0', letterSpacing: '1px' }}>YOU ENTERED</p>
+              <p style={{ fontSize: '12px', color: '#fff', margin: 0 }}>
+                {clientStreetAddress}, {clientCity}, {clientState} {clientZip}
+              </p>
+            </div>
+
+            <div style={{ background: 'rgba(56,239,125,0.05)', border: '1px solid rgba(56,239,125,0.2)', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+              <p style={{ fontSize: '10px', color: '#38ef7d', margin: '0 0 4px 0', letterSpacing: '1px' }}>USPS SUGGESTS</p>
+              <p style={{ fontSize: '12px', color: '#fff', margin: 0 }}>
+                {addressSuggestion.streetAddress}, {addressSuggestion.city}, {addressSuggestion.state} {addressSuggestion.ZIPCode}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={keepTypedAddress}
+                style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Keep As Typed
+              </button>
+              <button
+                type="button"
+                onClick={acceptAddressSuggestion}
+                style={{ flex: 1, padding: '10px', background: '#38ef7d', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Use Suggested
               </button>
             </div>
           </div>
