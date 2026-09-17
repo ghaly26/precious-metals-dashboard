@@ -399,6 +399,60 @@ async function getUspsAccessToken() {
   return access_token;
 }
 
+// 🟢 Address verification (Invoice mode only) — checks a client-entered
+// address against USPS's Addresses API and returns a standardized version
+// if one exists, so the frontend can offer it as a suggestion.
+app.post('/api/verify-address', async (req, res) => {
+  const { streetAddress, city, state, ZIPCode } = req.body;
+
+  if (!streetAddress || !city || !state) {
+    return res.status(400).json({ success: false, error: 'Street address, city, and state are required.' });
+  }
+
+  try {
+    const accessToken = await getUspsAccessToken();
+    const params = { streetAddress, city, state };
+    if (ZIPCode) params.ZIPCode = ZIPCode;
+
+    const response = await axios.get('https://apis.usps.com/addresses/v3/address', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params,
+    });
+
+    const standardized = response.data?.address;
+    if (!standardized) {
+      return res.json({ success: true, found: false });
+    }
+
+    const typedNormalized = `${streetAddress} ${city} ${state} ${ZIPCode || ''}`.toUpperCase().replace(/\s+/g, ' ').trim();
+    const standardizedNormalized = `${standardized.streetAddress} ${standardized.city} ${standardized.state} ${standardized.ZIPCode}`
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    res.json({
+      success: true,
+      found: true,
+      matchesTyped: typedNormalized === standardizedNormalized,
+      standardized,
+    });
+  } catch (error) {
+    const uspsData = error.response?.data;
+    console.error('USPS address verification failed:', uspsData || error.message);
+
+    // A 404 from this endpoint typically means USPS couldn't find/standardize
+    // the address at all — treat that as "not found" rather than a hard error.
+    if (error.response?.status === 404) {
+      return res.json({ success: true, found: false });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: uspsData?.error?.message || error.message || 'Address verification failed.',
+    });
+  }
+});
+
 async function getUspsPaymentToken() {
   if (uspsPaymentTokenCache.token && Date.now() < uspsPaymentTokenCache.expiresAt - 60 * 1000) {
     return uspsPaymentTokenCache.token;
