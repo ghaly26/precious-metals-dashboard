@@ -313,6 +313,31 @@ function App() {
   };
 
   useEffect(() => {
+    // Short synthesized startup chime (Web Audio, no audio file) — plays once
+    // when the dashboard first starts loading. Browsers block audio before
+    // any user interaction, so this may not sound on a completely fresh page
+    // load; it'll play normally from the user's first click onward.
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const audioCtx = new AudioCtx();
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — a simple ascending arpeggio
+      notes.forEach((freq, i) => {
+        const startTime = audioCtx.currentTime + i * 0.12;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.1, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.3);
+      });
+      setTimeout(() => audioCtx.close(), (notes.length * 0.12 + 0.3) * 1000);
+    }
+
     fetchRates();
   }, []);
 
