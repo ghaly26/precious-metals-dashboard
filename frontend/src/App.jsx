@@ -313,65 +313,7 @@ function App() {
   };
 
   useEffect(() => {
-    // Short synthesized startup chime (Web Audio, no audio file). Browsers
-    // block audio before any user interaction, so if the immediate attempt
-    // gets suspended, a one-time listener replays it on the user's first
-    // click/tap/keypress instead — the closest thing to "on load" that
-    // browser autoplay policy actually allows.
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return undefined;
-
-    const audioCtx = new AudioCtx();
-    let played = false;
-
-    const playChime = () => {
-      if (played) return;
-      played = true;
-      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — a simple ascending arpeggio
-      notes.forEach((freq, i) => {
-        const startTime = audioCtx.currentTime + i * 0.12;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.001, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.1, startTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(startTime);
-        osc.stop(startTime + 0.3);
-      });
-    };
-
-    playChime();
-
-    // If that attempt was actually blocked, audioCtx stays "suspended" —
-    // wire up a one-time fallback on the very next user interaction.
-    const tryResumeAndPlay = () => {
-      played = false;
-      audioCtx.resume().then(playChime);
-      cleanupListeners();
-    };
-    const cleanupListeners = () => {
-      document.removeEventListener('click', tryResumeAndPlay);
-      document.removeEventListener('touchstart', tryResumeAndPlay);
-      document.removeEventListener('keydown', tryResumeAndPlay);
-    };
-
-    if (audioCtx.state === 'suspended') {
-      document.addEventListener('click', tryResumeAndPlay, { once: true });
-      document.addEventListener('touchstart', tryResumeAndPlay, { once: true });
-      document.addEventListener('keydown', tryResumeAndPlay, { once: true });
-    }
-
-    return () => {
-      cleanupListeners();
-      audioCtx.close();
-    };
-  }, []);
-
-  useEffect(() => {    fetchRates();
+    fetchRates();
   }, []);
 
   const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross, pdfBase64 }) => {
