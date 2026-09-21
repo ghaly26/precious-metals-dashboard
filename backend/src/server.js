@@ -631,8 +631,8 @@ app.post('/api/create-shipping-label', async (req, res) => {
     // "postage" is only the base package rate — extra-service costs (Signature
     // Confirmation, Insurance, etc.) live in their own separate array, each
     // with its own name/price, and need to be summed in for the real total.
-    // const basePostage = Number(labelMetadata?.postage) || 0;
-    const basePostage = 10.54;
+    const basePostage = Number(labelMetadata?.postage) || 0;
+    // const basePostage = 10.54;
     const extraServicesBreakdown = (labelMetadata?.extraServices || []).map((s) => ({
       name: s.name,
       price: Number(s.price) || 0,
