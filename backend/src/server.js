@@ -20,7 +20,7 @@ const troyOunceToGram = 31.1035;
 const USE_LIVE_SOURCES = true; // Set to true in production
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
-const HARD_FALLBACK = { xau: 4378.36, xag: 66.43 };
+const HARD_FALLBACK = { xau: 4350.55, xag: 64.63 };
 
 // Simple in-memory cache so we don't hammer either source on every dashboard refresh.
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
@@ -599,9 +599,9 @@ app.post('/api/create-shipping-label', async (req, res) => {
         ZIPCode: toAddress.ZIPCode,
       },
       fromAddress: {
-        firstName: 'Queen',
-        lastName: 'Jewelry',
-        firm: 'Queen Jewelry LLC',
+        firstName: 'Samuel',
+        lastName: 'Youssef',
+        // firm: 'Queen Jewelry LLC',
         streetAddress: '3725 Summersville Ln',
         city: 'Fort Worth',
         state: 'TX',

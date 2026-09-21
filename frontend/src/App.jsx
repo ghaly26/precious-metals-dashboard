@@ -313,7 +313,65 @@ function App() {
   };
 
   useEffect(() => {
-    fetchRates();
+    // Short synthesized startup chime (Web Audio, no audio file). Browsers
+    // block audio before any user interaction, so if the immediate attempt
+    // gets suspended, a one-time listener replays it on the user's first
+    // click/tap/keypress instead — the closest thing to "on load" that
+    // browser autoplay policy actually allows.
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return undefined;
+
+    const audioCtx = new AudioCtx();
+    let played = false;
+
+    const playChime = () => {
+      if (played) return;
+      played = true;
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — a simple ascending arpeggio
+      notes.forEach((freq, i) => {
+        const startTime = audioCtx.currentTime + i * 0.12;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.1, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.3);
+      });
+    };
+
+    playChime();
+
+    // If that attempt was actually blocked, audioCtx stays "suspended" —
+    // wire up a one-time fallback on the very next user interaction.
+    const tryResumeAndPlay = () => {
+      played = false;
+      audioCtx.resume().then(playChime);
+      cleanupListeners();
+    };
+    const cleanupListeners = () => {
+      document.removeEventListener('click', tryResumeAndPlay);
+      document.removeEventListener('touchstart', tryResumeAndPlay);
+      document.removeEventListener('keydown', tryResumeAndPlay);
+    };
+
+    if (audioCtx.state === 'suspended') {
+      document.addEventListener('click', tryResumeAndPlay, { once: true });
+      document.addEventListener('touchstart', tryResumeAndPlay, { once: true });
+      document.addEventListener('keydown', tryResumeAndPlay, { once: true });
+    }
+
+    return () => {
+      cleanupListeners();
+      audioCtx.close();
+    };
+  }, []);
+
+  useEffect(() => {    fetchRates();
   }, []);
 
   const sendQuoteNotification = async ({ baseValue, feeAmount: fee, totalGross, pdfBase64 }) => {
@@ -481,10 +539,35 @@ function App() {
 
   const downloadShippingLabel = () => {
     if (!labelResult?.labelPdfBase64) return;
-    const link = document.createElement('a');
-    link.href = `data:application/pdf;base64,${labelResult.labelPdfBase64}`;
-    link.download = `USPS_Label_${labelResult.trackingNumber || Date.now()}.pdf`;
-    link.click();
+    try {
+      // A raw data: URI on the <a download> attribute is unreliable on mobile
+      // browsers (especially Safari) for larger files like a PDF — it can
+      // silently fail or just navigate back without downloading anything.
+      // Converting to a Blob + object URL is the more robust cross-browser way.
+      const byteChars = atob(labelResult.labelPdfBase64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `USPS_Label_${labelResult.trackingNumber || Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Some mobile browsers open the PDF in a new tab instead of downloading
+      // it outright — this is expected there; the file is still accessible.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+      // Fallback: open the PDF in a new tab if Blob conversion fails for any reason.
+      const dataUri = `data:application/pdf;base64,${labelResult.labelPdfBase64}`;
+      window.open(dataUri, '_blank');
+    }
   };
 
   const generatePDFReceipt = async () => {
