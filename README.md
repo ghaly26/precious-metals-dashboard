@@ -90,9 +90,11 @@ npm run dev
 *   **Build Command:** `npm install`
 *   **Start Command:** `npm start`
 
----
+### Project diagram
+
+![alt text](image.png)
 
 ## 🤝 Connect with Queen Jewelry LLC
 
 *   **Website:** [https://queenjewelryllc.com](https://queenjewelryllc.com)
-*   **Facebook:** [Queen Jewelry Official Page](https://facebook.com)
+*   **Facebook:** [Queen Jewelry Official Page](https://www.facebook.com/profile.php?id=61586279284348)
