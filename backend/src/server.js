@@ -26,7 +26,7 @@ const HARD_FALLBACK = { xau: 4287.25, xag: 64.48 };
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
 // and metals.dev's 100/mo free-tier caps, even with steady daytime traffic.
 let cache = { data: null, timestamp: 0 };
-const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 60 minutes will be next month's default, but 10 min is safer for now while testing live sources.
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
