@@ -91,8 +91,8 @@ npm run dev
 *   **Start Command:** `npm start`
 
 ### Project diagram
+![Project diagram](image.png)
 
-![alt text](image.png)
 
 ## 🤝 Connect with Queen Jewelry LLC
 
