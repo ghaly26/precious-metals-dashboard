@@ -599,10 +599,25 @@ function App() {
     doc.text(`Issued On: ${checkDate}`, 105, 33, { align: 'center' });
 
     const hasClientInfoQuote = !isInvoice && (customClientName.trim() !== '' || phoneNumber.trim() !== '');
-    const infoYOffset = isInvoice ? 14 : (hasClientInfoQuote ? 7 : 0);
+
+    // Client Address can be arbitrarily long, so wrap it and put Phone on its
+    // own line below rather than side-by-side (which overflowed before).
+    const addressWrapWidth = 170;
+    const addressLines = isInvoice
+      ? doc.splitTextToSize(`Client Address: ${clientAddressCombined}`, addressWrapWidth)
+      : [];
+
+    let infoBoxHeight = 26; // base: Store Location, Transaction/Status, Currency
+    if (isInvoice) {
+      infoBoxHeight += 6; // Client Name / Items row
+      infoBoxHeight += addressLines.length * 5; // wrapped address, 1+ lines
+      infoBoxHeight += 7; // Client Phone row
+    } else if (hasClientInfoQuote) {
+      infoBoxHeight += 7;
+    }
 
     doc.setFillColor(248, 250, 252);
-    doc.rect(15, 52, 180, 26 + infoYOffset, 'F');
+    doc.rect(15, 52, 180, infoBoxHeight, 'F');
     doc.setFontSize(8.5);
     doc.setTextColor(51, 51, 51);
     doc.text(
@@ -621,19 +636,29 @@ function App() {
     doc.text('Status: Verified Spot Lock', 125, 68);
     doc.text('Currency: USD ($)', 20, 74);
 
+    let infoCursorY = 74;
     if (isInvoice) {
-      doc.text(`Client Name: ${customClientName}`, 20, 80);
-      doc.text(`Items: ${items.length}`, 125, 80);
-      doc.text(`Client Address: ${clientAddressCombined}`, 20, 86);
-      doc.text(`Client Phone: ${phoneNumber}`, 125, 86);
+      infoCursorY += 6;
+      doc.text(`Client Name: ${customClientName}`, 20, infoCursorY);
+      doc.text(`Items: ${items.length}`, 125, infoCursorY);
+
+      infoCursorY += 6;
+      addressLines.forEach((line, idx) => {
+        doc.text(line, 20, infoCursorY + idx * 5);
+      });
+      infoCursorY += addressLines.length * 5;
+
+      infoCursorY += 1;
+      doc.text(`Client Phone: ${phoneNumber}`, 20, infoCursorY);
     } else if (hasClientInfoQuote) {
+      infoCursorY += 7;
       const clientInfoParts = [];
       if (customClientName.trim()) clientInfoParts.push(`Client: ${customClientName.trim()}`);
       if (phoneNumber.trim()) clientInfoParts.push(`Phone: ${phoneNumber.trim()}`);
-      doc.text(clientInfoParts.join('   |   '), 20, 81);
+      doc.text(clientInfoParts.join('   |   '), 20, infoCursorY);
     }
 
-    let cursorY = 86 + infoYOffset;
+    let cursorY = 52 + infoBoxHeight + 8;
 
     doc.setFillColor(17, 22, 34);
     doc.rect(15, cursorY, 180, 10, 'F');
