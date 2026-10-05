@@ -17,7 +17,7 @@ const troyOunceToGram = 31.1035;
 
 // 🧪 TEMPORARY TEST TOGGLE: set to false to skip goldprice.dev and metals.dev
 // entirely and always serve HARD_FALLBACK below. Flip back to true when done testing.
-const USE_LIVE_SOURCES = false; // Set to true in production
+const USE_LIVE_SOURCES = true; // Set to true in production
 
 // Last known-good prices, used only if every live source AND the cache are unavailable.
 const HARD_FALLBACK = { xau: 4145.95, xag: 68.77 };
@@ -26,7 +26,7 @@ const HARD_FALLBACK = { xau: 4145.95, xag: 68.77 };
 // 10 minutes comfortably keeps monthly usage well under goldprice.dev's 1,000/mo
 // and metals.dev's 100/mo free-tier caps, even with steady daytime traffic.
 let cache = { data: null, timestamp: 0 };
-const CACHE_TTL_MS = 10 * 60 * 1000; // 60 minutes will be next month's default, but 10 min is safer for now while testing live sources.
+const CACHE_TTL_MS = 32 * 60 * 1000; // 60 minutes will be next month's default, but 10 min is safer for now while testing live sources.
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
